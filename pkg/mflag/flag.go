@@ -419,11 +419,14 @@ func Set(name, value string) error {
 // PrintDefaults prints, to standard error unless configured
 // otherwise, the default values of all defined flags in the set.
 func (f *FlagSet) PrintDefaults() {
+	const BASE_SPACES = 3
+	maxSpace := 1
+	flagsToUsageMap := make(map[string]string)
 	f.VisitAll(func(flag *Flag) {
-		format := "  -%s=%s: %s\n"
+		format := "  -%s=%s"
 		if _, ok := flag.Value.(*stringValue); ok {
 			// put quotes on the value
-			format = "  -%s=%q: %s\n"
+			format = "  -%s=%q"
 		}
 		names := []string{}
 		for _, name := range flag.Names {
@@ -432,9 +435,18 @@ func (f *FlagSet) PrintDefaults() {
 			}
 		}
 		if len(names) > 0 {
-			fmt.Fprintf(f.out(), format, strings.Join(names, ", -"), flag.DefValue, flag.Usage)
+			joinedNames := strings.Join(names, ", -")
+			argBase := fmt.Sprintf(format, joinedNames, flag.DefValue)
+			if len(argBase) > maxSpace {
+				maxSpace = len(argBase)
+			}
+			flagsToUsageMap[argBase] = flag.Usage
 		}
 	})
+	for argBase, usage := range flagsToUsageMap {
+		alignIndent := strings.Repeat(" ", maxSpace-len(argBase)+BASE_SPACES)
+		fmt.Fprintf(os.Stderr, "%s%s%s\n", argBase, alignIndent, usage)
+	}
 }
 
 // PrintDefaults prints to standard error the default values of all defined command-line flags.
