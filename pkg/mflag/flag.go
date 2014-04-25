@@ -423,12 +423,8 @@ func (f *FlagSet) PrintDefaults() {
 	maxSpace := 1
 	flagsToUsageMap := make(map[string]string)
 	f.VisitAll(func(flag *Flag) {
-		format := "  -%s=%s"
-		if _, ok := flag.Value.(*stringValue); ok {
-			// put quotes on the value
-			format = "  -%s=%q"
-		}
 		names := []string{}
+		argBase := ""
 		for _, name := range flag.Names {
 			if name[0] != '#' {
 				names = append(names, name)
@@ -436,7 +432,15 @@ func (f *FlagSet) PrintDefaults() {
 		}
 		if len(names) > 0 {
 			joinedNames := strings.Join(names, ", -")
-			argBase := fmt.Sprintf(format, joinedNames, flag.DefValue)
+			if _, ok := flag.Value.(*boolValue); ok {
+				// Default=false is implied by boolean arguments
+				argBase = fmt.Sprintf("  -%s", joinedNames)
+			} else if _, ok = flag.Value.(*stringValue); ok {
+				// wrap empty string in quotes
+				argBase = fmt.Sprintf("  -%s=%q", joinedNames, flag.DefValue)
+			} else {
+				argBase = fmt.Sprintf("  -%s=%s", joinedNames, flag.DefValue)
+			}
 			if len(argBase) > maxSpace {
 				maxSpace = len(argBase)
 			}
