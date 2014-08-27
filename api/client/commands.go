@@ -528,6 +528,15 @@ func (cli *DockerCli) CmdInfo(args ...string) error {
 	return nil
 }
 
+func (cli *DockerCli) CmdServices(args ...string) error {
+	cmd := cli.Subcmd("services", "[OPTIONS] SUBCMD", "Orchestrate docker services")
+	cmd.Bool
+	if err := cmd.Parse(args); err != nil {
+		return nil
+	}
+	service.CmdPs()
+}
+
 func (cli *DockerCli) CmdStop(args ...string) error {
 	cmd := cli.Subcmd("stop", "[OPTIONS] CONTAINER [CONTAINER...]", "Stop a running container by sending SIGTERM and then SIGKILL after a grace period")
 	nSeconds := cmd.Int([]string{"t", "-time"}, 10, "Number of seconds to wait for the container to stop before killing it. Default is 10 seconds.")
