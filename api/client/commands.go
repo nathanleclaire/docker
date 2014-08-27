@@ -37,6 +37,7 @@ import (
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
+	service "github.com/docker/fig"
 )
 
 const (
