@@ -62,10 +62,6 @@ func (h *Host) Remove() error {
 	return os.RemoveAll(hostPath)
 }
 
-func (h *Host) ToJSON() ([]byte, error) {
-	return json.Marshal(h)
-}
-
 func (h *Host) LoadConfig(storePath string) error {
 	data, err := ioutil.ReadFile(path.Join(storePath, "config.json"))
 	if err != nil {
