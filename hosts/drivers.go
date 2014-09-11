@@ -8,7 +8,7 @@ import (
 
 type Driver interface {
 	Name() string
-	GetConfig() map[string]string
+	GetOptions() map[string]string
 	// Create(name string) error
 	// Start() error
 	// Stop() error
@@ -19,10 +19,10 @@ type Driver interface {
 	//State() (State, error)
 }
 
-func NewDriver(name string) (Driver, error) {
+func NewDriver(name string, options map[string]string) (Driver, error) {
 	switch name {
 	case "socket":
-		return socket.NewDriver(), nil
+		return socket.NewDriver(options), nil
 	}
 	return nil, fmt.Errorf("hosts: Unknown driver %q", name)
 }

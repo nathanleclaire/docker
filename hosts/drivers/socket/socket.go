@@ -1,17 +1,17 @@
 package socket
 
 type Driver struct {
-	Config map[string]string
+	Options map[string]string
 }
 
-func NewDriver() *Driver {
-	return &Driver{}
+func NewDriver(options map[string]string) *Driver {
+	return &Driver{Options: options}
 }
 
 func (d *Driver) Name() string {
 	return "socket"
 }
 
-func (d *Driver) GetConfig() map[string]string {
-	return map[string]string{}
+func (d *Driver) GetOptions() map[string]string {
+	return d.Options
 }

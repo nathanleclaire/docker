@@ -2673,6 +2673,11 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	}
 
 	name := cmd.Arg(0)
+	options := make(map[string]string)
+	for _, s := range flOption.GetAll() {
+		bits := strings.SplitN(s, "=", 2)
+		options[bits[0]] = bits[1]
+	}
 
 	store := hosts.NewStore()
 
