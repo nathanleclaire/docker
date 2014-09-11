@@ -15,12 +15,12 @@ type Host struct {
 }
 
 type Config struct {
-	DriverName   string
-	DriverConfig map[string]string
+	DriverName    string
+	DriverOptions map[string]string
 }
 
-func NewHost(name, driverName, storePath string) (*Host, error) {
-	driver, err := NewDriver(driverName)
+func NewHost(name, driverName string, driverOptions map[string]string, storePath string) (*Host, error) {
+	driver, err := NewDriver(driverName, driverOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (h *Host) Create() error {
 	if err := os.Mkdir(path.Join(h.storePath, h.Name), 0700); err != nil {
 		return err
 	}
-	config := Config{DriverName: h.Driver.Name(), DriverConfig: h.Driver.GetConfig()}
+	config := Config{DriverName: h.Driver.Name(), DriverOptions: h.Driver.GetOptions()}
 	data, err := json.Marshal(config)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (h *Host) LoadConfig(storePath string) error {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return err
 	}
-	driver, err := NewDriver(config.DriverName)
+	driver, err := NewDriver(config.DriverName, config.DriverOptions)
 	if err != nil {
 		return err
 	}

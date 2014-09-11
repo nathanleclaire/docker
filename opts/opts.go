@@ -227,3 +227,11 @@ func ValidateMirror(val string) (string, error) {
 
 	return fmt.Sprintf("%s://%s/v1/", uri.Scheme, uri.Host), nil
 }
+
+func ValidateOption(val string) (string, error) {
+	arr := strings.Split(val, "=")
+	if len(arr) < 2 {
+		return "", fmt.Errorf("config options must be in the format key=value")
+	}
+	return val, nil
+}

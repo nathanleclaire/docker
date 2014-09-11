@@ -2553,24 +2553,31 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	cmd := cli.Subcmd("create", "NAME", "Create hosts")
 
+	flOption := opts.NewListOpts(opts.ValidateOption)
+	cmd.Var(&flOption, []string{"o", "-option"}, "Set driver config option, in format key=value")
 	driver := cmd.String([]string{"d", "-driver"}, "socket", "Driver to create host with")
 
 	if err := cmd.Parse(args); err != nil {
 		return err
 	}
-	if cmd.NArg() < 1 {
+	if cmd.NArg() != 1 {
 		cmd.Usage()
 		return nil
 	}
 
 	name := cmd.Arg(0)
+	options := make(map[string]string)
+	for _, s := range flOption.GetAll() {
+		bits := strings.SplitN(s, "=", 2)
+		options[bits[0]] = bits[1]
+	}
 
 	store, err := hosts.NewStore()
 	if err != nil {
 		return err
 	}
 
-	return store.Create(name, *driver)
+	return store.Create(name, *driver, options)
 }
 
 func (cli *DockerCli) CmdHostsRm(args ...string) error {

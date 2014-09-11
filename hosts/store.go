@@ -16,8 +16,8 @@ func NewStore() (*Store, error) {
 	return &Store{Path: rootPath}, nil
 }
 
-func (s *Store) Create(name string, driverName string) error {
-	host, err := NewHost(name, driverName, s.Path)
+func (s *Store) Create(name string, driverName string, driverOptions map[string]string) error {
+	host, err := NewHost(name, driverName, driverOptions, s.Path)
 	if err != nil {
 		return err
 	}
