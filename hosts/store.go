@@ -11,9 +11,9 @@ type Store struct {
 	Path string
 }
 
-func NewStore() (*Store, error) {
+func NewStore() *Store {
 	rootPath := path.Join(os.Getenv("HOME"), ".docker/hosts")
-	return &Store{Path: rootPath}, nil
+	return &Store{Path: rootPath}
 }
 
 func (s *Store) Create(name string, driverName string, driverOptions map[string]string) error {

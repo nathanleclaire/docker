@@ -2533,10 +2533,7 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 		return err
 	}
 
-	store, err := hosts.NewStore()
-	if err != nil {
-		return err
-	}
+	store := hosts.NewStore()
 
 	hostList, err := store.List()
 	if err != nil {
@@ -2572,10 +2569,7 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 		options[bits[0]] = bits[1]
 	}
 
-	store, err := hosts.NewStore()
-	if err != nil {
-		return err
-	}
+	store := hosts.NewStore()
 
 	return store.Create(name, *driver, options)
 }
@@ -2590,10 +2584,7 @@ func (cli *DockerCli) CmdHostsRm(args ...string) error {
 		return nil
 	}
 
-	store, err := hosts.NewStore()
-	if err != nil {
-		return err
-	}
+	store := hosts.NewStore()
 
 	return store.Remove(cmd.Arg(0))
 }
