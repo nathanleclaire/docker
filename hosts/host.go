@@ -52,7 +52,7 @@ func (h *Host) Create() error {
 	if err := os.Mkdir(path.Join(h.storePath, h.Name), 0700); err != nil {
 		return err
 	}
-	config := Config{DriverName: h.Driver.Name(), DriverOptions: h.Driver.GetOptions()}
+	config := Config{DriverName: h.Driver.DriverName(), DriverOptions: h.Driver.GetOptions()}
 	data, err := json.Marshal(config)
 	if err != nil {
 		return err

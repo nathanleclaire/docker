@@ -7,7 +7,7 @@ import (
 )
 
 type Driver interface {
-	Name() string
+	DriverName() string
 	GetOptions() map[string]string
 	GetURL() string
 	// Create(name string) error
