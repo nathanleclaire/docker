@@ -9,6 +9,7 @@ import (
 type Driver interface {
 	Name() string
 	GetOptions() map[string]string
+	GetURL() string
 	// Create(name string) error
 	// Start() error
 	// Stop() error

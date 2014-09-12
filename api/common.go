@@ -17,7 +17,7 @@ const (
 	DEFAULTUNIXSOCKET                 = "/var/run/docker.sock"
 )
 
-func ValidateHost(val string) (string, error) {
+func ValidateHostURL(val string) (string, error) {
 	host, err := parsers.ParseHost(DEFAULTHTTPHOST, DEFAULTUNIXSOCKET, val)
 	if err != nil {
 		return val, err

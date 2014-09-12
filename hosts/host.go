@@ -6,6 +6,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
+)
+
+var (
+	validHostNameChars   = `[a-zA-Z0-9_.-]`
+	validHostNamePattern = regexp.MustCompile(`^/?` + validHostNameChars + `+$`)
 )
 
 type Host struct {
@@ -33,6 +39,13 @@ func LoadHost(name string, storePath string) (*Host, error) {
 		return nil, err
 	}
 	return host, nil
+}
+
+func ValidateHostName(name string) (string, error) {
+	if !validHostNamePattern.MatchString(name) {
+		return name, fmt.Errorf("Invalid host name %q, it must match %s", name, validHostNamePattern)
+	}
+	return name, nil
 }
 
 func (h *Host) Create() error {

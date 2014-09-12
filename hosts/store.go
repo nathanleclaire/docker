@@ -49,3 +49,17 @@ func (s *Store) List() ([]Host, error) {
 	}
 	return hosts, nil
 }
+
+func (s *Store) Exists(name string) (bool, error) {
+	_, err := os.Stat(path.Join(s.Path, name))
+	if os.IsNotExist(err) {
+		return false, nil
+	} else if err == nil {
+		return true, nil
+	}
+	return false, err
+}
+
+func (s *Store) Load(name string) (*Host, error) {
+	return LoadHost(name, s.Path)
+}

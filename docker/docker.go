@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/dockerversion"
+	"github.com/docker/docker/hosts"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/reexec"
 	"github.com/docker/docker/utils"
@@ -44,7 +45,7 @@ func main() {
 			// If we do not have a host, default to unix socket
 			defaultHost = fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET)
 		}
-		defaultHost, err := api.ValidateHost(defaultHost)
+		defaultHost, err := api.ValidateHostURL(defaultHost)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -59,7 +60,27 @@ func main() {
 	if len(flHosts) > 1 {
 		log.Fatal("Please specify only one -H")
 	}
-	protoAddrParts := strings.SplitN(flHosts[0], "://", 2)
+
+	hostURL := flHosts[0]
+
+	// Attempt to find a host if it's a valid name
+	if _, err := hosts.ValidateHostName(hostURL); err == nil {
+		store := hosts.NewStore()
+		exists, err := store.Exists(hostURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if !exists {
+			log.Fatal(fmt.Errorf("Host %q does not exist. Create it using 'docker hosts create'.", hostURL))
+		}
+		host, err := store.Load(hostURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		hostURL = host.Driver.GetURL()
+	}
+
+	protoAddrParts := strings.SplitN(hostURL, "://", 2)
 
 	var (
 		cli       *client.DockerCli

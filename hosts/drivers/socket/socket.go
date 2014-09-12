@@ -15,3 +15,7 @@ func (d *Driver) Name() string {
 func (d *Driver) GetOptions() map[string]string {
 	return d.Options
 }
+
+func (d *Driver) GetURL() string {
+	return d.Options["url"]
+}
