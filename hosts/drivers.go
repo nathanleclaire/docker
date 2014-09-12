@@ -23,7 +23,7 @@ type Driver interface {
 func NewDriver(name string, options map[string]string) (Driver, error) {
 	switch name {
 	case "socket":
-		return socket.NewDriver(options), nil
+		return socket.NewDriver(options)
 	}
 	return nil, fmt.Errorf("hosts: Unknown driver %q", name)
 }
