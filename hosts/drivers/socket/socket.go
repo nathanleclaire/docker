@@ -13,7 +13,7 @@ func NewDriver(options map[string]string) (*Driver, error) {
 	return &Driver{Options: options}, nil
 }
 
-func (d *Driver) Name() string {
+func (d *Driver) DriverName() string {
 	return "socket"
 }
 
