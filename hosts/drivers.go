@@ -12,12 +12,12 @@ type Driver interface {
 	GetOptions() map[string]string
 	GetURL() string
 	Create() error
+	Remove() error
 	// Start() error
 	// Stop() error
 	// Kill() error
 	// Restart() error
 	// Pause() error
-	// Remove() error
 	//State() (State, error)
 }
 
