@@ -28,3 +28,7 @@ func (d *Driver) GetURL() string {
 func (d *Driver) Create() error {
 	return nil
 }
+
+func (d *Driver) Remove() error {
+	return nil
+}

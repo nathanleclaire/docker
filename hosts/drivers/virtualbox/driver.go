@@ -161,6 +161,10 @@ func (d *Driver) Load() error {
 	return nil
 }
 
+func (d *Driver) Remove() error {
+	return vbm("unregistervm", "--delete", d.MachineName)
+}
+
 func (d *Driver) setMachineNameIfNotSet() {
 	if d.MachineName == "" {
 		d.MachineName = fmt.Sprintf("docker-host-%s", utils.GenerateRandomID())

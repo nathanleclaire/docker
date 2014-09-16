@@ -67,6 +67,10 @@ func (h *Host) Create() error {
 }
 
 func (h *Host) Remove() error {
+	if err := h.Driver.Remove(); err != nil {
+		return err
+	}
+
 	hostPath := path.Join(h.storePath, h.Name)
 	file, err := os.Stat(hostPath)
 	if err != nil {
