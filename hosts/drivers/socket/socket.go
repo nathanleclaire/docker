@@ -3,14 +3,14 @@ package socket
 import "fmt"
 
 type Driver struct {
-	options map[string]string
+	url string
 }
 
 func NewDriver(options map[string]string) (*Driver, error) {
 	if _, ok := options["url"]; !ok {
 		return nil, fmt.Errorf("The socket driver requires the option \"url\". Set it with -o url=...")
 	}
-	return &Driver{options: options}, nil
+	return &Driver{url: options["url"]}, nil
 }
 
 func (d *Driver) DriverName() string {
@@ -18,11 +18,11 @@ func (d *Driver) DriverName() string {
 }
 
 func (d *Driver) GetOptions() map[string]string {
-	return d.options
+	return map[string]string{"url": d.url}
 }
 
 func (d *Driver) GetURL() string {
-	return d.options["url"]
+	return d.url
 }
 
 func (d *Driver) Create() error {
