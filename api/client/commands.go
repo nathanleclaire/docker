@@ -26,6 +26,7 @@ import (
 	"github.com/docker/docker/archive"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/hosts"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/log"
@@ -2498,4 +2499,89 @@ func (cli *DockerCli) CmdExec(args ...string) error {
 	}
 
 	return nil
+}
+
+func (cli *DockerCli) CmdHosts(args ...string) error {
+	description := "Manage Docker hosts\n\nCommands:\n"
+	for _, command := range [][]string{
+		{"create", "Create a host"},
+		{"list", "List hosts (default)"},
+		{"rm", "Remove a host"},
+	} {
+		description += fmt.Sprintf("    %-10.10s%s\n", command[0], command[1])
+	}
+
+	description += "\nRun 'docker hosts COMMAND --help' for more information on a command."
+
+	cmd := cli.Subcmd("hosts", "[COMMAND]", description)
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() < 1 {
+		return cli.CmdHostsList(args...)
+	}
+
+	cmd.Usage()
+	return nil
+}
+
+func (cli *DockerCli) CmdHostsList(args ...string) error {
+	cmd := cli.Subcmd("list", "", "List hosts")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	store, err := hosts.NewStore()
+	if err != nil {
+		return err
+	}
+
+	hostList, err := store.List()
+	if err != nil {
+		return err
+	}
+
+	for _, host := range hostList {
+		fmt.Println(host.Name)
+	}
+
+	return nil
+}
+
+func (cli *DockerCli) CmdHostsCreate(args ...string) error {
+	cmd := cli.Subcmd("create", "NAME DRIVER", "Create hosts")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+	if cmd.NArg() < 2 {
+		cmd.Usage()
+		return nil
+	}
+
+	store, err := hosts.NewStore()
+	if err != nil {
+		return err
+	}
+
+	return store.Create(cmd.Arg(0), cmd.Arg(1))
+}
+
+func (cli *DockerCli) CmdHostsRm(args ...string) error {
+	cmd := cli.Subcmd("rm", "NAME", "Remove a host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+	if cmd.NArg() < 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	store, err := hosts.NewStore()
+	if err != nil {
+		return err
+	}
+
+	return store.Remove(cmd.Arg(0))
 }
