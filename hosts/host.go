@@ -35,7 +35,7 @@ func NewHost(name, driverName string, driverOptions map[string]string, storePath
 
 func LoadHost(name string, storePath string) (*Host, error) {
 	host := &Host{Name: name, storePath: storePath}
-	if err := host.LoadConfig(path.Join(storePath, name)); err != nil {
+	if err := host.LoadConfig(); err != nil {
 		return nil, err
 	}
 	return host, nil
@@ -49,7 +49,7 @@ func ValidateHostName(name string) (string, error) {
 }
 
 func (h *Host) Create() error {
-	if err := os.Mkdir(path.Join(h.storePath, h.Name), 0700); err != nil {
+	if err := os.Mkdir(h.storePath, 0700); err != nil {
 		return err
 	}
 	if err := h.Driver.Create(); err != nil {
@@ -60,7 +60,7 @@ func (h *Host) Create() error {
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(path.Join(h.storePath, h.Name, "config.json"), data, 0600); err != nil {
+	if err := ioutil.WriteFile(path.Join(h.storePath, "config.json"), data, 0600); err != nil {
 		return err
 	}
 	return nil
@@ -71,19 +71,18 @@ func (h *Host) Remove() error {
 		return err
 	}
 
-	hostPath := path.Join(h.storePath, h.Name)
-	file, err := os.Stat(hostPath)
+	file, err := os.Stat(h.storePath)
 	if err != nil {
 		return err
 	}
 	if !file.IsDir() {
-		return fmt.Errorf("%q is not a directory", hostPath)
+		return fmt.Errorf("%q is not a directory", h.storePath)
 	}
-	return os.RemoveAll(hostPath)
+	return os.RemoveAll(h.storePath)
 }
 
-func (h *Host) LoadConfig(storePath string) error {
-	data, err := ioutil.ReadFile(path.Join(storePath, "config.json"))
+func (h *Host) LoadConfig() error {
+	data, err := ioutil.ReadFile(path.Join(h.storePath, "config.json"))
 	if err != nil {
 		return err
 	}

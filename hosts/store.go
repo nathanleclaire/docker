@@ -17,7 +17,8 @@ func NewStore() *Store {
 }
 
 func (s *Store) Create(name string, driverName string, driverOptions map[string]string) error {
-	host, err := NewHost(name, driverName, driverOptions, s.Path)
+	hostPath := path.Join(s.Path, name)
+	host, err := NewHost(name, driverName, driverOptions, hostPath)
 	if err != nil {
 		return err
 	}
@@ -25,7 +26,7 @@ func (s *Store) Create(name string, driverName string, driverOptions map[string]
 }
 
 func (s *Store) Remove(name string) error {
-	host, err := LoadHost(name, s.Path)
+	host, err := s.Load(name)
 	if err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func (s *Store) List() ([]Host, error) {
 	var hosts []Host
 	for _, file := range dir {
 		if file.IsDir() {
-			host, err := LoadHost(file.Name(), s.Path)
+			host, err := s.Load(file.Name())
 			if err != nil {
 				return nil, err
 			}
@@ -61,5 +62,6 @@ func (s *Store) Exists(name string) (bool, error) {
 }
 
 func (s *Store) Load(name string) (*Host, error) {
-	return LoadHost(name, s.Path)
+	hostPath := path.Join(s.Path, name)
+	return LoadHost(name, hostPath)
 }
