@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	validHostNameChars   = `[a-zA-Z0-9_.-]`
-	validHostNamePattern = regexp.MustCompile(`^/?` + validHostNameChars + `+$`)
+	validHostNameChars   = `[a-zA-Z0-9_]`
+	validHostNamePattern = regexp.MustCompile(`^` + validHostNameChars + `+$`)
 )
 
 type Host struct {
