@@ -2507,6 +2507,8 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 		{"create", "Create a host"},
 		{"list", "List hosts (default)"},
 		{"rm", "Remove a host"},
+		{"start", "Start a host"},
+		{"stop", "Stop a host"},
 	} {
 		description += fmt.Sprintf("    %-10.10s%s\n", command[0], command[1])
 	}
@@ -2576,6 +2578,44 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 		return err
 	}
 	return host.Start()
+}
+
+func (cli *DockerCli) CmdHostsStart(args ...string) error {
+	cmd := cli.Subcmd("hosts start", "NAME", "Start a host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+	if cmd.NArg() < 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	store := hosts.NewStore()
+
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+	return host.Start()
+}
+
+func (cli *DockerCli) CmdHostsStop(args ...string) error {
+	cmd := cli.Subcmd("hosts stop", "NAME", "Stop a host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+	if cmd.NArg() < 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	store := hosts.NewStore()
+
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+	return host.Stop()
 }
 
 func (cli *DockerCli) CmdHostsRm(args ...string) error {

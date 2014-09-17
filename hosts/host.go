@@ -72,6 +72,10 @@ func (h *Host) Start() error {
 	return h.Driver.Start()
 }
 
+func (h *Host) Stop() error {
+	return h.Driver.Stop()
+}
+
 func (h *Host) Remove() error {
 	if err := h.Driver.Remove(); err != nil {
 		return err
