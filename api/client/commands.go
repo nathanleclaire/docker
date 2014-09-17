@@ -1535,7 +1535,10 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 	}
 	w := tabwriter.NewWriter(cli.out, 20, 1, 3, ' ', 0)
 	if !*quiet {
-		fmt.Fprint(w, "CONTAINER ID\tIMAGE\tCOMMAND\tCREATED\tSTATUS\tPORTS\tNAMES")
+		fmt.Fprint(w, "NAME\tCREATED\tSTATUS\tPORTS\tIMAGE\tCOMMAND")
+		if *noTrunc {
+			fmt.Fprint(w, "\tID")
+		}
 		if *size {
 			fmt.Fprintln(w, "\tSIZE")
 		} else {
@@ -1548,10 +1551,6 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 			outID    = out.Get("Id")
 			outNames = out.GetList("Names")
 		)
-
-		if !*noTrunc {
-			outID = utils.TruncateID(outID)
-		}
 
 		// Remove the leading / from the names
 		for i := 0; i < len(outNames); i++ {
@@ -1570,12 +1569,30 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 				outNamesList = outNames[0]
 			}
 			ports.ReadListFrom([]byte(out.Get("Ports")))
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s ago\t%s\t%s\t%s\t", outID, out.Get("Image"), outCommand, units.HumanDuration(time.Now().UTC().Sub(time.Unix(out.GetInt64("Created"), 0))), out.Get("Status"), api.DisplayablePorts(ports), outNamesList)
+
+			fmt.Fprintf(w,
+				"%s\t%s ago\t%s\t%s\t%s\t%s",
+				outNamesList,
+				units.HumanDuration(time.Now().UTC().Sub(time.Unix(out.GetInt64("Created"), 0))),
+				out.Get("Status"),
+				api.DisplayablePorts(ports),
+				out.Get("Image"),
+				outCommand,
+			)
+
+			if *noTrunc {
+				fmt.Fprintf(w, "\t%s", outID)
+			}
+
 			if *size {
-				if out.GetInt("SizeRootFs") > 0 {
-					fmt.Fprintf(w, "%s (virtual %s)\n", units.HumanSize(out.GetInt64("SizeRw")), units.HumanSize(out.GetInt64("SizeRootFs")))
+				if out.Get("Type") == "container" {
+					if out.GetInt("SizeRootFs") > 0 {
+						fmt.Fprintf(w, "\t%s (virtual %s)\n", units.HumanSize(out.GetInt64("SizeRw")), units.HumanSize(out.GetInt64("SizeRootFs")))
+					} else {
+						fmt.Fprintf(w, "\t%s\n", units.HumanSize(out.GetInt64("SizeRw")))
+					}
 				} else {
-					fmt.Fprintf(w, "%s\n", units.HumanSize(out.GetInt64("SizeRw")))
+					fmt.Fprint(w, "\t\n")
 				}
 			} else {
 				fmt.Fprint(w, "\n")
