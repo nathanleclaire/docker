@@ -7,6 +7,8 @@ import (
 	"os"
 	"path"
 	"regexp"
+
+	"github.com/docker/docker/hosts/drivers"
 )
 
 var (
@@ -16,7 +18,7 @@ var (
 
 type Host struct {
 	Name      string
-	Driver    Driver
+	Driver    drivers.Driver
 	storePath string
 }
 
@@ -26,7 +28,7 @@ type Config struct {
 }
 
 func NewHost(name, driverName string, driverOptions map[string]string, storePath string) (*Host, error) {
-	driver, err := NewDriver(driverName, driverOptions)
+	driver, err := drivers.NewDriver(driverName, driverOptions, storePath)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +68,10 @@ func (h *Host) Create() error {
 	return nil
 }
 
+func (h *Host) Start() error {
+	return h.Driver.Start()
+}
+
 func (h *Host) Remove() error {
 	if err := h.Driver.Remove(); err != nil {
 		return err
@@ -90,7 +96,7 @@ func (h *Host) LoadConfig() error {
 	if err := json.Unmarshal(data, &config); err != nil {
 		return err
 	}
-	driver, err := NewDriver(config.DriverName, config.DriverOptions)
+	driver, err := drivers.NewDriver(config.DriverName, config.DriverOptions, h.storePath)
 	if err != nil {
 		return err
 	}

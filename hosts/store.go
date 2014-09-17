@@ -16,13 +16,16 @@ func NewStore() *Store {
 	return &Store{Path: rootPath}
 }
 
-func (s *Store) Create(name string, driverName string, driverOptions map[string]string) error {
+func (s *Store) Create(name string, driverName string, driverOptions map[string]string) (*Host, error) {
 	hostPath := path.Join(s.Path, name)
 	host, err := NewHost(name, driverName, driverOptions, hostPath)
 	if err != nil {
-		return err
+		return host, err
 	}
-	return host.Create()
+	if err := host.Create(); err != nil {
+		return host, err
+	}
+	return host, nil
 }
 
 func (s *Store) Remove(name string) error {

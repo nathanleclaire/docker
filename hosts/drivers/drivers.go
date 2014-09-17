@@ -1,10 +1,11 @@
-package hosts
+package drivers
 
 import (
 	"fmt"
 
 	"github.com/docker/docker/hosts/drivers/socket"
 	"github.com/docker/docker/hosts/drivers/virtualbox"
+	"github.com/docker/docker/hosts/state"
 )
 
 type Driver interface {
@@ -13,20 +14,20 @@ type Driver interface {
 	GetURL() string
 	Create() error
 	Remove() error
-	// Start() error
-	// Stop() error
+	Start() error
+	State() (state.State, error)
+	Stop() error
 	// Kill() error
 	// Restart() error
 	// Pause() error
-	//State() (State, error)
 }
 
-func NewDriver(name string, options map[string]string) (Driver, error) {
+func NewDriver(name string, options map[string]string, storePath string) (Driver, error) {
 	switch name {
 	case "socket":
-		return socket.NewDriver(options)
+		return socket.NewDriver(options, storePath)
 	case "virtualbox":
-		return virtualbox.NewDriver(options)
+		return virtualbox.NewDriver(options, storePath)
 	}
 	return nil, fmt.Errorf("hosts: Unknown driver %q", name)
 }
