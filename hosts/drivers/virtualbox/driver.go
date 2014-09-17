@@ -1,11 +1,20 @@
 package virtualbox
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
-	"strconv"
-	"strings"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"os/exec"
+	"path"
+	"regexp"
+	"runtime"
+	"time"
 
+	"github.com/docker/docker/hosts/state"
+	"github.com/docker/docker/pkg/log"
 	"github.com/docker/docker/utils"
 )
 
@@ -13,41 +22,16 @@ var (
 	verbose = true
 )
 
-type Flag int
-
-// Flag names in lowercases to be consistent with VBoxManage options.
-const (
-	F_acpi Flag = 1 << iota
-	F_ioapic
-	F_rtcuseutc
-	F_cpuhotplug
-	F_pae
-	F_longmode
-	F_synthcpu
-	F_hpet
-	F_hwvirtex
-	F_triplefaultreset
-	F_nestedpaging
-	F_largepages
-	F_vtxvpid
-	F_vtxux
-	F_accelerate3d
-)
-
 type Driver struct {
 	MachineName string
 	DockerPort  uint
 	SSHPort     uint
-	CPUs        uint
 	Memory      uint // main memory (in MB)
-	VRAM        uint // video memory (in MB)
-	OSType      string
-	Flag        Flag
-	BootOrder   []string // max 4 slots, each in {none|floppy|dvd|disk|net}
+	storePath   string
 }
 
-func NewDriver(options map[string]string) (*Driver, error) {
-	driver := &Driver{}
+func NewDriver(options map[string]string, storePath string) (*Driver, error) {
+	driver := &Driver{storePath: storePath}
 	driver.LoadOptions(options)
 	return driver, nil
 }
@@ -62,6 +46,12 @@ func (d *Driver) GetOptions() map[string]string {
 
 func (d *Driver) LoadOptions(options map[string]string) {
 	d.MachineName = options["MachineName"]
+	// d.Memory = options["Memory"]
+	// if d.Memory == nil {
+	d.Memory = 1024
+	// }
+	d.SSHPort = 2022
+	d.DockerPort = 4243
 }
 
 func (d *Driver) GetURL() string {
@@ -71,98 +61,165 @@ func (d *Driver) GetURL() string {
 func (d *Driver) Create() error {
 	d.setMachineNameIfNotSet()
 
-	args := []string{"createvm", "--name", d.MachineName, "--register"}
-	if err := vbm(args...); err != nil {
+	isISODownloaded, err := d.isISODownloaded()
+	if err != nil {
+		return err
+	}
+	if !isISODownloaded {
+		tag, err := getLatestReleaseName()
+		if err != nil {
+			return err
+		}
+		log.Infof("Downloading boot2docker %s...", tag)
+		if err := downloadISO(path.Join(d.storePath, "boot2docker.iso"), tag); err != nil {
+			return err
+		}
+	}
+
+	diskPath := path.Join(d.storePath, "boot2docker.vmdk")
+	if err := makeDiskImage(diskPath, 10); err != nil {
 		return err
 	}
 
-	if err := d.Load(); err != nil {
+	if err := vbm("createvm",
+		"--name", d.MachineName,
+		"--register"); err != nil {
+		return err
+	}
+
+	cpus := uint(runtime.NumCPU())
+	if cpus > 32 {
+		cpus = 32
+	}
+
+	if err := vbm("modifyvm", d.MachineName,
+		"--firmware", "bios",
+		"--bioslogofadein", "off",
+		"--bioslogofadeout", "off",
+		"--natdnshostresolver1", "on",
+		"--bioslogodisplaytime", "0",
+		"--biosbootmenu", "disabled",
+
+		"--ostype", "Linux26_64",
+		"--cpus", fmt.Sprintf("%d", cpus),
+		"--memory", fmt.Sprintf("%d", d.Memory),
+
+		"--acpi", "on",
+		"--ioapic", "on",
+		"--rtcuseutc", "on",
+		"--cpuhotplug", "off",
+		"--pae", "on",
+		"--longmode", "on",
+		"--synthcpu", "off",
+		"--hpet", "on",
+		"--hwvirtex", "on",
+		"--triplefaultreset", "off",
+		"--nestedpaging", "on",
+		"--largepages", "on",
+		"--vtxvpid", "on",
+		"--vtxux", "off",
+		"--accelerate3d", "off",
+		"--uart1", "0x3F8", "4",
+		// "--uartmode1", "server", m.SerialFile,
+		"--boot1", "dvd"); err != nil {
+		return err
+	}
+
+	if err := vbm("modifyvm", d.MachineName,
+		"--nic1", "nat",
+		"--nictype1", "virtio",
+		"--cableconnected1", "on"); err != nil {
+		return err
+	}
+
+	if err := vbm("storagectl", d.MachineName,
+		"--name", "SATA",
+		"--add", "sata",
+		"--hostiocache", "on"); err != nil {
+		return err
+	}
+
+	if err := vbm("storageattach", d.MachineName,
+		"--storagectl", "SATA",
+		"--port", "0",
+		"--device", "0",
+		"--type", "dvddrive",
+		"--medium", path.Join(d.storePath, "boot2docker.iso")); err != nil {
+		return err
+	}
+
+	if err := vbm("storageattach", d.MachineName,
+		"--storagectl", "SATA",
+		"--port", "1",
+		"--device", "0",
+		"--type", "hdd",
+		"--medium", diskPath); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (d *Driver) Load() error {
-	stdout, stderr, err := vbmOutErr("showvminfo", d.MachineName, "--machinereadable")
-	if err != nil {
-		if reMachineNotFound.FindString(stderr) != "" {
-			return ErrMachineNotExist
-		}
-		return err
-	}
-	s := bufio.NewScanner(strings.NewReader(stdout))
-	for s.Scan() {
-		res := reVMInfoLine.FindStringSubmatch(s.Text())
-		if res == nil {
-			continue
-		}
-		key := res[1]
-		if key == "" {
-			key = res[2]
-		}
-		val := res[3]
-		if val == "" {
-			val = res[4]
-		}
+func (d *Driver) Start() error {
+	return vbm("startvm", d.MachineName, "--type", "headless")
+}
 
-		switch key {
-		// case "VMState":
-		// 	d.State = driver.MachineState(val)
-		case "memory":
-			n, err := strconv.ParseUint(val, 10, 32)
-			if err != nil {
-				return err
-			}
-			d.Memory = uint(n)
-		case "cpus":
-			n, err := strconv.ParseUint(val, 10, 32)
-			if err != nil {
-				return err
-			}
-			d.CPUs = uint(n)
-		case "vram":
-			n, err := strconv.ParseUint(val, 10, 32)
-			if err != nil {
-				return err
-			}
-			d.VRAM = uint(n)
-		// case "CfgFile":
-		// 	m.CfgFile = val
-		// 	m.BaseFolder = filepath.Dir(val)
-		// case "uartmode1":
-		// 	// uartmode1="server,/home/sven/.boot2docker/boot2docker-vm.sock"
-		// 	vals := strings.Split(val, ",")
-		// 	if len(vals) >= 2 {
-		// 		m.SerialFile = vals[1]
-		// 	}
-		default:
-			if strings.HasPrefix(key, "Forwarding(") {
-				// "Forwarding(\d*)" are ordered by the name inside the val, not fixed order.
-				// Forwarding(0)="docker,tcp,127.0.0.1,5555,,"
-				// Forwarding(1)="ssh,tcp,127.0.0.1,2222,,22"
-				vals := strings.Split(val, ",")
-				n, err := strconv.ParseUint(vals[3], 10, 32)
-				if err != nil {
-					return err
-				}
-				switch vals[0] {
-				case "docker":
-					d.DockerPort = uint(n)
-				case "ssh":
-					d.SSHPort = uint(n)
-				}
-			}
-		}
-	}
-	if err := s.Err(); err != nil {
+func (d *Driver) Stop() error {
+	if err := vbm("controlvm", d.MachineName, "acpipowerbutton"); err != nil {
 		return err
+	}
+	for {
+		s, err := d.State()
+		if err != nil {
+			return err
+		}
+		if s == state.Running {
+			time.Sleep(1 * time.Second)
+		} else {
+			break
+		}
 	}
 	return nil
 }
 
 func (d *Driver) Remove() error {
+	s, err := d.State()
+	if err != nil {
+		return err
+	}
+	if s == state.Running {
+		if err := d.Stop(); err != nil {
+			return err
+		}
+	}
 	return vbm("unregistervm", "--delete", d.MachineName)
+}
+
+func (d *Driver) State() (state.State, error) {
+	stdout, stderr, err := vbmOutErr("showvminfo", d.MachineName,
+		"--machinereadable")
+	if err != nil {
+		if reMachineNotFound.FindString(stderr) != "" {
+			return state.Unknown, ErrMachineNotExist
+		}
+		return state.Unknown, err
+	}
+	re := regexp.MustCompile(`(?m)^VMState="(\w+)"$`)
+	groups := re.FindStringSubmatch(stdout)
+	if len(groups) < 1 {
+		return state.Unknown, nil
+	}
+	switch groups[1] {
+	case "running":
+		return state.Running, nil
+	case "paused":
+		return state.Paused, nil
+	case "saved":
+		return state.Saved, nil
+	case "poweroff", "aborted":
+		return state.Stopped, nil
+	}
+	return state.Unknown, nil
 }
 
 func (d *Driver) setMachineNameIfNotSet() {
@@ -171,6 +228,80 @@ func (d *Driver) setMachineNameIfNotSet() {
 	}
 }
 
-func (d *Driver) setExtra(key, val string) error {
-	return vbm("setextradata", d.MachineName, key, val)
+func (d *Driver) isISODownloaded() (bool, error) {
+	if _, err := os.Stat(path.Join(d.storePath, "boot2docker.iso")); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// Get the latest boot2docker release tag name (e.g. "v0.6.0").
+func getLatestReleaseName() (string, error) {
+	rsp, err := http.Get("https://api.github.com/repos/boot2docker/boot2docker/releases")
+	if err != nil {
+		return "", err
+	}
+	defer rsp.Body.Close()
+
+	var t []struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.NewDecoder(rsp.Body).Decode(&t); err != nil {
+		return "", err
+	}
+	if len(t) == 0 {
+		return "", fmt.Errorf("no releases found")
+	}
+	return t[0].TagName, nil
+}
+
+// Download boot2docker ISO image for the given tag and save it at dest.
+func downloadISO(dest, tag string) error {
+	rsp, err := http.Get(fmt.Sprintf("https://github.com/boot2docker/boot2docker/releases/download/%s/boot2docker.iso", tag))
+	if err != nil {
+		return err
+	}
+	defer rsp.Body.Close()
+
+	// Download to a temp file first then rename it to avoid partial download.
+	f, err := ioutil.TempFile("", "boot2docker-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := io.Copy(f, rsp.Body); err != nil {
+		// TODO: display download progress?
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(f.Name(), dest); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Make a boot2docker VM disk image.
+func makeDiskImage(dest string, size int) error {
+	log.Debugf("Creating %d MB hard disk image...", size)
+	cmd := exec.Command(VBM, "convertfromraw", "stdin", dest, fmt.Sprintf("%d", size*1024*1024), "--format", "VMDK")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	w, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	// Write the magic string so the VM auto-formats the disk upon first boot.
+	if _, err := w.Write([]byte("boot2docker, please format-me")); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+
+	return cmd.Run()
 }
