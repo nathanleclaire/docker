@@ -26,6 +26,7 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 		before      = job.Getenv("before")
 		n           = job.GetenvInt("limit")
 		size        = job.GetenvBool("size")
+		groupName   = job.Getenv("group")
 		psFilters   filters.Args
 		filt_exited []int
 	)
@@ -136,40 +137,81 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 		return nil
 	}
 
-	groupContainers := make(map[string][]*Container)
-
-	for _, container := range daemon.List() {
-		if container.Group != "" {
-			groupContainers[container.Group] = append(groupContainers[container.Group], container)
-		} else {
+	writeContainers := func(containers []*Container) error {
+		for _, container := range containers {
 			if err := writeCont(container); err != nil {
 				if err != errLast {
-					return job.Error(err)
+					return err
 				}
 				break
 			}
 		}
+
+		return nil
 	}
 
-	groups, err := daemon.Groups()
-	if err != nil {
-		return job.Error(err)
+	writeTopLevelContainersAndGroups := func() error {
+		var (
+			ungroupedContainers []*Container
+			groupedContainers   = make(map[string][]*Container)
+		)
+
+		for _, container := range daemon.List() {
+			if container.Group != "" {
+				groupedContainers[container.Group] = append(groupedContainers[container.Group], container)
+			} else {
+				ungroupedContainers = append(ungroupedContainers, container)
+			}
+		}
+
+		groups, err := daemon.Groups()
+		if err != nil {
+			return err
+		}
+
+		if err := writeContainers(ungroupedContainers); err != nil {
+			return err
+		}
+
+		for _, group := range groups {
+			out := &engine.Env{}
+
+			out.Set("Type", "group")
+			out.SetList("Names", []string{"/" + group.Name + "/"})
+			out.SetInt64("Created", group.Created.Unix())
+			out.Set("Status", fmt.Sprintf("%d containers", len(groupedContainers[group.Name])))
+			out.SetList("Ports", []string{})
+
+			out.Set("Id", "")
+			out.Set("Image", "")
+			out.Set("Command", "")
+
+			outs.Add(out)
+		}
+
+		return nil
 	}
 
-	for _, group := range groups {
-		out := &engine.Env{}
+	writeGroupContainers := func(groupName string) error {
+		var containers []*Container
 
-		out.Set("Type", "group")
-		out.SetList("Names", []string{"/" + group.Name + "/"})
-		out.SetInt64("Created", group.Created.Unix())
-		out.Set("Status", fmt.Sprintf("%d containers", len(groupContainers[group.Name])))
-		out.SetList("Ports", []string{})
+		for _, container := range daemon.List() {
+			if container.Group == groupName {
+				containers = append(containers, container)
+			}
+		}
 
-		out.Set("Id", "")
-		out.Set("Image", "")
-		out.Set("Command", "")
+		return writeContainers(containers)
+	}
 
-		outs.Add(out)
+	if groupName == "" {
+		if err := writeTopLevelContainersAndGroups(); err != nil {
+			return job.Error(err)
+		}
+	} else {
+		if err := writeGroupContainers(groupName); err != nil {
+			return job.Error(err)
+		}
 	}
 
 	outs.ReverseSort()

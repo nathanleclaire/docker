@@ -1470,7 +1470,7 @@ func (cli *DockerCli) printTreeNode(noTrunc bool, image *engine.Env, prefix stri
 }
 
 func (cli *DockerCli) CmdPs(args ...string) error {
-	cmd := cli.Subcmd("ps", "", "List containers")
+	cmd := cli.Subcmd("ps", "[GROUP]", "List containers")
 	quiet := cmd.Bool([]string{"q", "-quiet"}, false, "Only display numeric IDs")
 	size := cmd.Bool([]string{"s", "-size"}, false, "Display sizes")
 	all := cmd.Bool([]string{"a", "-all"}, false, "Show all containers. Only running containers are shown by default.")
@@ -1486,6 +1486,12 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 	if err := cmd.Parse(args); err != nil {
 		return nil
 	}
+	if cmd.NArg() > 1 {
+		cmd.Usage()
+		return nil
+	}
+	groupName := cmd.Arg(0)
+
 	v := url.Values{}
 	if *last == -1 && *nLatest {
 		*last = 1
@@ -1504,6 +1510,9 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 	}
 	if *size {
 		v.Set("size", "1")
+	}
+	if groupName != "" {
+		v.Set("group", groupName)
 	}
 
 	// Consolidate all filter flags, and sanity check them.
