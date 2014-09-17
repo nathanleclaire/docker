@@ -53,6 +53,8 @@ func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
 			return err
 		}
 
+		container.Group = config.Name
+
 		log.Printf("group %s container %s with id%s\n", config.Name, name, container.ID)
 	}
 
@@ -140,6 +142,36 @@ func (daemon *Daemon) StartGroup(name string) error {
 	}
 
 	return nil
+}
+
+func (daemon *Daemon) Groups() ([]*Group, error) {
+	groups := []*Group{}
+
+	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
+	files, err := ioutil.ReadDir(groupsRoot)
+	if err != nil {
+		return []*Group{}, err
+	}
+
+	for _, file := range files {
+		if file.Mode().IsDir() {
+			groupRoot := filepath.Join(groupsRoot, file.Name())
+			f, err := os.Open(filepath.Join(groupRoot, "config.json"))
+			if err != nil {
+				return []*Group{}, err
+			}
+			defer f.Close()
+
+			group := &Group{}
+			if err := json.NewDecoder(f).Decode(group); err != nil {
+				return []*Group{}, err
+			}
+
+			groups = append(groups, group)
+		}
+	}
+
+	return groups, nil
 }
 
 type network struct {

@@ -101,6 +101,7 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 		}
 		displayed++
 		out := &engine.Env{}
+		out.Set("Type", "container")
 		out.Set("Id", container.ID)
 		out.SetList("Names", names[container.ID])
 		out.Set("Image", daemon.Repositories().ImageName(container.Image))
@@ -135,14 +136,42 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 		return nil
 	}
 
+	groupContainers := make(map[string][]*Container)
+
 	for _, container := range daemon.List() {
-		if err := writeCont(container); err != nil {
-			if err != errLast {
-				return job.Error(err)
+		if container.Group != "" {
+			groupContainers[container.Group] = append(groupContainers[container.Group], container)
+		} else {
+			if err := writeCont(container); err != nil {
+				if err != errLast {
+					return job.Error(err)
+				}
+				break
 			}
-			break
 		}
 	}
+
+	groups, err := daemon.Groups()
+	if err != nil {
+		return job.Error(err)
+	}
+
+	for _, group := range groups {
+		out := &engine.Env{}
+
+		out.Set("Type", "group")
+		out.SetList("Names", []string{"/" + group.Name + "/"})
+		out.SetInt64("Created", group.Created.Unix())
+		out.Set("Status", fmt.Sprintf("%d containers", len(groupContainers[group.Name])))
+		out.SetList("Ports", []string{})
+
+		out.Set("Id", "")
+		out.Set("Image", "")
+		out.Set("Command", "")
+
+		outs.Add(out)
+	}
+
 	outs.ReverseSort()
 	if _, err := outs.WriteListTo(job.Stdout); err != nil {
 		return job.Error(err)
