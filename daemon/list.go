@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -17,20 +16,27 @@ func (daemon *Daemon) List() []*Container {
 	return daemon.containers.List()
 }
 
+type listOptions struct {
+	all         bool
+	since       string
+	sinceCont   *Container
+	before      string
+	beforeCont  *Container
+	limit       int
+	size        bool
+	filt_exited []int
+}
+
 func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
-	var (
-		foundBefore bool
-		displayed   int
-		all         = job.GetenvBool("all")
-		since       = job.Getenv("since")
-		before      = job.Getenv("before")
-		n           = job.GetenvInt("limit")
-		size        = job.GetenvBool("size")
-		groupName   = job.Getenv("group")
-		psFilters   filters.Args
-		filt_exited []int
-	)
-	outs := engine.NewTable("Created", 0)
+	groupName := job.Getenv("group")
+
+	options := listOptions{
+		all:    job.GetenvBool("all"),
+		since:  job.Getenv("since"),
+		before: job.Getenv("before"),
+		limit:  job.GetenvInt("limit"),
+		size:   job.GetenvBool("size"),
+	}
 
 	psFilters, err := filters.FromParam(job.Getenv("filters"))
 	if err != nil {
@@ -42,174 +48,32 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 			if err != nil {
 				return job.Error(err)
 			}
-			filt_exited = append(filt_exited, code)
+			options.filt_exited = append(options.filt_exited, code)
 		}
 	}
 
-	names := map[string][]string{}
-	daemon.ContainerGraph().Walk("/", func(p string, e *graphdb.Entity) error {
-		names[e.ID()] = append(names[e.ID()], p)
-		return nil
-	}, -1)
-
-	var beforeCont, sinceCont *Container
-	if before != "" {
-		beforeCont = daemon.Get(before)
-		if beforeCont == nil {
-			return job.Error(fmt.Errorf("Could not find container with name or id %s", before))
+	if options.before != "" {
+		options.beforeCont = daemon.Get(options.before)
+		if options.beforeCont == nil {
+			return job.Error(fmt.Errorf("Could not find container with name or id %s", options.before))
 		}
 	}
 
-	if since != "" {
-		sinceCont = daemon.Get(since)
-		if sinceCont == nil {
-			return job.Error(fmt.Errorf("Could not find container with name or id %s", since))
+	if options.since != "" {
+		options.sinceCont = daemon.Get(options.since)
+		if options.sinceCont == nil {
+			return job.Error(fmt.Errorf("Could not find container with name or id %s", options.since))
 		}
 	}
 
-	errLast := errors.New("last container")
-	writeCont := func(container *Container) error {
-		container.Lock()
-		defer container.Unlock()
-		if !container.Running && !all && n <= 0 && since == "" && before == "" {
-			return nil
-		}
-		if before != "" && !foundBefore {
-			if container.ID == beforeCont.ID {
-				foundBefore = true
-			}
-			return nil
-		}
-		if n > 0 && displayed == n {
-			return errLast
-		}
-		if since != "" {
-			if container.ID == sinceCont.ID {
-				return errLast
-			}
-		}
-		if len(filt_exited) > 0 && !container.Running {
-			should_skip := true
-			for _, code := range filt_exited {
-				if code == container.GetExitCode() {
-					should_skip = false
-					break
-				}
-			}
-			if should_skip {
-				return nil
-			}
-		}
-		displayed++
-		out := &engine.Env{}
-		out.Set("Type", "container")
-		out.Set("Id", container.ID)
-		out.SetList("Names", names[container.ID])
-		out.Set("Image", daemon.Repositories().ImageName(container.Image))
-		if len(container.Args) > 0 {
-			args := []string{}
-			for _, arg := range container.Args {
-				if strings.Contains(arg, " ") {
-					args = append(args, fmt.Sprintf("'%s'", arg))
-				} else {
-					args = append(args, arg)
-				}
-			}
-			argsAsString := strings.Join(args, " ")
-
-			out.Set("Command", fmt.Sprintf("\"%s %s\"", container.Path, argsAsString))
-		} else {
-			out.Set("Command", fmt.Sprintf("\"%s\"", container.Path))
-		}
-		out.SetInt64("Created", container.Created.Unix())
-		out.Set("Status", container.State.String())
-		str, err := container.NetworkSettings.PortMappingAPI().ToListString()
-		if err != nil {
-			return err
-		}
-		out.Set("Ports", str)
-		if size {
-			sizeRw, sizeRootFs := container.GetSize()
-			out.SetInt64("SizeRw", sizeRw)
-			out.SetInt64("SizeRootFs", sizeRootFs)
-		}
-		outs.Add(out)
-		return nil
-	}
-
-	writeContainers := func(containers []*Container) error {
-		for _, container := range containers {
-			if err := writeCont(container); err != nil {
-				if err != errLast {
-					return err
-				}
-				break
-			}
-		}
-
-		return nil
-	}
-
-	writeTopLevelContainersAndGroups := func() error {
-		var (
-			ungroupedContainers []*Container
-			groupedContainers   = make(map[string][]*Container)
-		)
-
-		for _, container := range daemon.List() {
-			if container.Group != "" {
-				groupedContainers[container.Group] = append(groupedContainers[container.Group], container)
-			} else {
-				ungroupedContainers = append(ungroupedContainers, container)
-			}
-		}
-
-		groups, err := daemon.Groups()
-		if err != nil {
-			return err
-		}
-
-		if err := writeContainers(ungroupedContainers); err != nil {
-			return err
-		}
-
-		for _, group := range groups {
-			out := &engine.Env{}
-
-			out.Set("Type", "group")
-			out.SetList("Names", []string{"/" + group.Name + "/"})
-			out.SetInt64("Created", group.Created.Unix())
-			out.Set("Status", fmt.Sprintf("%d containers", len(groupedContainers[group.Name])))
-			out.SetList("Ports", []string{})
-
-			out.Set("Id", "")
-			out.Set("Image", "")
-			out.Set("Command", "")
-
-			outs.Add(out)
-		}
-
-		return nil
-	}
-
-	writeGroupContainers := func(groupName string) error {
-		var containers []*Container
-
-		for _, container := range daemon.List() {
-			if container.Group == groupName {
-				containers = append(containers, container)
-			}
-		}
-
-		return writeContainers(containers)
-	}
+	outs := engine.NewTable("Created", 0)
 
 	if groupName == "" {
-		if err := writeTopLevelContainersAndGroups(); err != nil {
+		if err := daemon.listTopLevelContainersAndGroups(outs, options); err != nil {
 			return job.Error(err)
 		}
 	} else {
-		if err := writeGroupContainers(groupName); err != nil {
+		if err := daemon.listGroupContainers(outs, groupName, options); err != nil {
 			return job.Error(err)
 		}
 	}
@@ -219,4 +83,160 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 		return job.Error(err)
 	}
 	return engine.StatusOK
+}
+
+func (daemon *Daemon) listTopLevelContainersAndGroups(outs *engine.Table, options listOptions) error {
+	var (
+		ungroupedContainers []*Container
+		groupedContainers   = make(map[string][]*Container)
+	)
+
+	for _, container := range filterContainers(daemon.List(), options) {
+		if container.Group != "" {
+			groupedContainers[container.Group] = append(groupedContainers[container.Group], container)
+		} else {
+			ungroupedContainers = append(ungroupedContainers, container)
+		}
+	}
+
+	if err := daemon.listContainers(outs, ungroupedContainers, options); err != nil {
+		return err
+	}
+
+	groups, err := daemon.Groups()
+	if err != nil {
+		return err
+	}
+
+	for _, group := range groups {
+		out := &engine.Env{}
+
+		out.Set("Type", "group")
+		out.SetList("Names", []string{"/" + group.Name + "/"})
+		out.SetInt64("Created", group.Created.Unix())
+		out.Set("Status", fmt.Sprintf("%d containers", len(groupedContainers[group.Name])))
+		out.SetList("Ports", []string{})
+
+		out.Set("Id", "")
+		out.Set("Image", "")
+		out.Set("Command", "")
+
+		outs.Add(out)
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) listGroupContainers(outs *engine.Table, groupName string, options listOptions) error {
+	var groupContainers []*Container
+
+	for _, c := range filterContainers(daemon.List(), options) {
+		if c.Group == groupName {
+			groupContainers = append(groupContainers, c)
+		}
+	}
+
+	return daemon.listContainers(outs, groupContainers, options)
+}
+
+func filterContainers(unfiltered []*Container, options listOptions) []*Container {
+	var (
+		foundBefore bool
+		displayed   int
+		filtered    []*Container
+	)
+
+	for _, container := range unfiltered {
+		container.Lock()
+		defer container.Unlock()
+		if !container.Running && !options.all && options.limit <= 0 && options.since == "" && options.before == "" {
+			continue
+		}
+		if options.before != "" && !foundBefore {
+			if container.ID == options.beforeCont.ID {
+				foundBefore = true
+			}
+			continue
+		}
+		if options.limit > 0 && displayed == options.limit {
+			break
+		}
+		if options.since != "" {
+			if container.ID == options.sinceCont.ID {
+				break
+			}
+		}
+		if len(options.filt_exited) > 0 && !container.Running {
+			should_skip := true
+			for _, code := range options.filt_exited {
+				if code == container.GetExitCode() {
+					should_skip = false
+					break
+				}
+			}
+			if should_skip {
+				continue
+			}
+		}
+		displayed++
+		filtered = append(filtered, container)
+	}
+
+	return filtered
+}
+
+type nameMap map[string][]string
+
+func (daemon *Daemon) listContainers(outs *engine.Table, containers []*Container, options listOptions) error {
+	names := nameMap{}
+	daemon.ContainerGraph().Walk("/", func(p string, e *graphdb.Entity) error {
+		names[e.ID()] = append(names[e.ID()], p)
+		return nil
+	}, -1)
+
+	for _, c := range containers {
+		env, err := daemon.envForContainer(c, names, options)
+		if err != nil {
+			return err
+		}
+		outs.Add(env)
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) envForContainer(container *Container, names nameMap, options listOptions) (*engine.Env, error) {
+	out := &engine.Env{}
+	out.Set("Type", "container")
+	out.Set("Id", container.ID)
+	out.SetList("Names", names[container.ID])
+	out.Set("Image", daemon.Repositories().ImageName(container.Image))
+	if len(container.Args) > 0 {
+		args := []string{}
+		for _, arg := range container.Args {
+			if strings.Contains(arg, " ") {
+				args = append(args, fmt.Sprintf("'%s'", arg))
+			} else {
+				args = append(args, arg)
+			}
+		}
+		argsAsString := strings.Join(args, " ")
+
+		out.Set("Command", fmt.Sprintf("\"%s %s\"", container.Path, argsAsString))
+	} else {
+		out.Set("Command", fmt.Sprintf("\"%s\"", container.Path))
+	}
+	out.SetInt64("Created", container.Created.Unix())
+	out.Set("Status", container.State.String())
+	str, err := container.NetworkSettings.PortMappingAPI().ToListString()
+	if err != nil {
+		return nil, err
+	}
+	out.Set("Ports", str)
+	if options.size {
+		sizeRw, sizeRootFs := container.GetSize()
+		out.SetInt64("SizeRw", sizeRw)
+		out.SetInt64("SizeRootFs", sizeRootFs)
+	}
+	return out, nil
 }
