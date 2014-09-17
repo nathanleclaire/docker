@@ -39,6 +39,7 @@ import (
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
+	"gopkg.in/yaml.v1"
 )
 
 const (
@@ -2106,6 +2107,47 @@ func (cli *DockerCli) CmdCreate(args ...string) error {
 	return nil
 }
 
+func (cli *DockerCli) parseGroupConfig(cmd *flag.FlagSet) error {
+	data, err := ioutil.ReadFile("group.yml")
+	if err != nil {
+		if os.IsNotExist(err) {
+			cmd.Usage()
+			return nil
+		}
+
+		return err
+	}
+
+	var group *runconfig.GroupConfig
+	if err := yaml.Unmarshal(data, &group); err != nil {
+		return err
+	}
+
+	if err := validateGroupConfig(group); err != nil {
+		return err
+	}
+
+	if _, _, err := cli.call("POST", "/groups/run", group, true); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateGroupConfig(group *runconfig.GroupConfig) (err error) {
+	for _, c := range group.Containers {
+		for _, v := range c.Volumes {
+			if v.Name == "." {
+				if v.Name, err = os.Getwd(); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func (cli *DockerCli) CmdRun(args ...string) error {
 	// FIXME: just use runconfig.Parse already
 	cmd := cli.Subcmd("run", "IMAGE [COMMAND] [ARG...]", "Run a command in a new container")
@@ -2128,8 +2170,7 @@ func (cli *DockerCli) CmdRun(args ...string) error {
 		return err
 	}
 	if config.Image == "" {
-		cmd.Usage()
-		return nil
+		return cli.parseGroupConfig(cmd)
 	}
 
 	if *flDetach {

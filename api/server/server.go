@@ -32,6 +32,7 @@ import (
 	"github.com/docker/docker/pkg/systemd"
 	"github.com/docker/docker/pkg/version"
 	"github.com/docker/docker/registry"
+	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
 )
 
@@ -1130,6 +1131,28 @@ func postContainerExecResize(eng *engine.Engine, version version.Version, w http
 	return nil
 }
 
+func postGroupsRun(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var config *runconfig.GroupConfig
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		return err
+	}
+
+	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
+		CreateGroup(*runconfig.GroupConfig) error
+		StartGroup(string) error
+	})
+
+	if err := daemon.CreateGroup(config); err != nil {
+		return err
+	}
+
+	if err := daemon.StartGroup(config.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func optionsHandler(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -1255,6 +1278,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, dockerVersion st
 			"/containers/{name:.*}/exec":    postContainerExecCreate,
 			"/exec/{name:.*}/start":         postContainerExecStart,
 			"/exec/{name:.*}/resize":        postContainerExecResize,
+			"/groups/run":                   postGroupsRun,
 		},
 		"DELETE": {
 			"/containers/{name:.*}": deleteContainers,
