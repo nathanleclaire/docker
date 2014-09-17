@@ -8,10 +8,17 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/runconfig"
 )
+
+type Group struct {
+	runconfig.GroupConfig
+
+	Created time.Time
+}
 
 // create root
 // create hosts file
@@ -33,7 +40,9 @@ func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
 	}
 	defer f.Close()
 
-	if err := json.NewEncoder(f).Encode(config); err != nil {
+	group := &Group{GroupConfig: *config, Created: time.Now()}
+
+	if err := json.NewEncoder(f).Encode(group); err != nil {
 		return err
 	}
 
