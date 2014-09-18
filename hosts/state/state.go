@@ -10,3 +10,12 @@ const (
 	Saved
 	Stopped
 )
+
+var states = []string{"Unknown", "Running", "Paused", "Saved", "Stopped"}
+
+func (s State) String() string {
+	if int(s) < len(states)-1 {
+		return states[s]
+	}
+	return ""
+}
