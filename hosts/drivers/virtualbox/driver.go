@@ -76,7 +76,7 @@ func (d *Driver) Create() error {
 		}
 	}
 
-	diskPath := path.Join(d.storePath, "boot2docker.vmdk")
+	diskPath := path.Join(d.storePath, "disk.vmdk")
 	if err := makeDiskImage(diskPath, 10); err != nil {
 		return err
 	}
