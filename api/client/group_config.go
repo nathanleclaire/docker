@@ -52,7 +52,20 @@ func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*runconfig.GroupConf
 
 			container.Image = tag
 		} else {
-			container.Image = c.Image
+			tag := c.Image
+
+			imageExists, err := cli.checkImageExists(tag)
+			if err != nil {
+				return nil, err
+			}
+
+			if !imageExists {
+				if err := cli.pullImage(tag); err != nil {
+					return nil, err
+				}
+			}
+
+			container.Image = tag
 		}
 
 		container.Command = c.Command
