@@ -1,16 +1,20 @@
 package virtualbox
 
 import (
+	"archive/tar"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/hosts/state"
@@ -27,6 +31,9 @@ type Driver struct {
 	DockerPort  uint
 	SSHPort     uint
 	Memory      uint // main memory (in MB)
+	HostIP      string
+	LowerIP     string
+	UpperIP     string
 	storePath   string
 }
 
@@ -50,12 +57,16 @@ func (d *Driver) LoadOptions(options map[string]string) {
 	// if d.Memory == nil {
 	d.Memory = 1024
 	// }
-	d.SSHPort = 2022
-	d.DockerPort = 4243
+	d.SSHPort = 2223
+	d.HostIP = "192.168.60.1"
 }
 
 func (d *Driver) GetURL() (string, error) {
-	return "", nil
+	ip, err := d.getIPAddress()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("tcp://%s:2375", ip), nil
 }
 
 func (d *Driver) Create() error {
@@ -76,8 +87,11 @@ func (d *Driver) Create() error {
 		}
 	}
 
-	diskPath := path.Join(d.storePath, "disk.vmdk")
-	if err := makeDiskImage(diskPath, 10); err != nil {
+	if err := d.generateSSHKey(); err != nil {
+		return err
+	}
+
+	if err := d.generateDiskImage(10); err != nil {
 		return err
 	}
 
@@ -130,6 +144,28 @@ func (d *Driver) Create() error {
 		return err
 	}
 
+	if err := vbm("modifyvm", d.MachineName,
+		"--natpf1", fmt.Sprintf("ssh,tcp,127.0.0.1,%d,,22", d.SSHPort)); err != nil {
+		return err
+	}
+
+	hostOnlyNetwork, err := getOrCreateHostOnlyNetwork(
+		net.ParseIP("192.168.99.1"),
+		net.IPv4Mask(255, 255, 255, 0),
+		net.ParseIP("192.168.99.2"),
+		net.ParseIP("192.168.99.100"),
+		net.ParseIP("192.168.99.254"))
+	if err != nil {
+		return err
+	}
+	if err := vbm("modifyvm", d.MachineName,
+		"--nic2", "hostonly",
+		"--nictype2", "virtio",
+		"--hostonlyadapter2", hostOnlyNetwork.Name,
+		"--cableconnected2", "on"); err != nil {
+		return err
+	}
+
 	if err := vbm("storagectl", d.MachineName,
 		"--name", "SATA",
 		"--add", "sata",
@@ -151,7 +187,7 @@ func (d *Driver) Create() error {
 		"--port", "1",
 		"--device", "0",
 		"--type", "hdd",
-		"--medium", diskPath); err != nil {
+		"--medium", d.diskPath()); err != nil {
 		return err
 	}
 
@@ -236,6 +272,73 @@ func (d *Driver) isISODownloaded() (bool, error) {
 	return true, nil
 }
 
+func (d *Driver) getIPAddress() (string, error) {
+	cmd := d.getSSHCommand("ip addr show dev eth1")
+
+	b, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	out := string(b)
+	log.Debugf("SSH returned: %s\nEND SSH\n", out)
+	// parse to find: inet 192.168.59.103/24 brd 192.168.59.255 scope global eth1
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		vals := strings.Split(strings.TrimSpace(line), " ")
+		if len(vals) >= 2 && vals[0] == "inet" {
+			return vals[1][:strings.Index(vals[1], "/")], nil
+		}
+	}
+
+	return "", fmt.Errorf("No IP address found %s", out)
+}
+
+func (d *Driver) getSSHCommand(args ...string) *exec.Cmd {
+
+	defaultSSHArgs := []string{
+		"-o", "IdentitiesOnly=yes",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
+		"-o", "LogLevel=quiet", // suppress "Warning: Permanently added '[localhost]:2022' (ECDSA) to the list of known hosts."
+		"-p", fmt.Sprintf("%d", d.SSHPort),
+		"-i", d.sshKeyPath(),
+		"docker@localhost",
+	}
+
+	sshArgs := append(defaultSSHArgs, args...)
+	cmd := exec.Command("ssh", sshArgs...)
+	log.Debugf("executing: %v", strings.Join(cmd.Args, " "))
+
+	return cmd
+}
+
+func (d *Driver) generateSSHKey() error {
+	if _, err := os.Stat(d.sshKeyPath()); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+
+		cmd := exec.Command("ssh-keygen", "-t", "rsa", "-N", "", "-f", d.sshKeyPath())
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		log.Debugf("executing: %v %v\n", cmd.Path, strings.Join(cmd.Args, " "))
+
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *Driver) sshKeyPath() string {
+	return path.Join(d.storePath, "id_rsa")
+}
+
+func (d *Driver) diskPath() string {
+	return path.Join(d.storePath, "disk.vmdk")
+}
+
 // Get the latest boot2docker release tag name (e.g. "v0.6.0").
 func getLatestReleaseName() (string, error) {
 	rsp, err := http.Get("https://api.github.com/repos/boot2docker/boot2docker/releases")
@@ -284,22 +387,110 @@ func downloadISO(dest, tag string) error {
 }
 
 // Make a boot2docker VM disk image.
-func makeDiskImage(dest string, size int) error {
+func (d *Driver) generateDiskImage(size uint) error {
 	log.Debugf("Creating %d MB hard disk image...", size)
-	cmd := exec.Command(VBM, "convertfromraw", "stdin", dest, fmt.Sprintf("%d", size*1024*1024), "--format", "VMDK")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	w, err := cmd.StdinPipe()
+
+	magicString := "boot2docker, please format-me"
+
+	buf := new(bytes.Buffer)
+	tw := tar.NewWriter(buf)
+
+	// magicString first so the automount script knows to format the disk
+	file := &tar.Header{Name: magicString, Size: int64(len(magicString))}
+	if err := tw.WriteHeader(file); err != nil {
+		return err
+	}
+	if _, err := tw.Write([]byte(magicString)); err != nil {
+		return err
+	}
+	// .ssh/key.pub => authorized_keys
+	file = &tar.Header{Name: ".ssh", Typeflag: tar.TypeDir, Mode: 0700}
+	if err := tw.WriteHeader(file); err != nil {
+		return err
+	}
+	pubKey, err := ioutil.ReadFile(d.sshKeyPath() + ".pub")
 	if err != nil {
 		return err
 	}
-	// Write the magic string so the VM auto-formats the disk upon first boot.
-	if _, err := w.Write([]byte("boot2docker, please format-me")); err != nil {
+	file = &tar.Header{Name: ".ssh/authorized_keys", Size: int64(len(pubKey)), Mode: 0644}
+	if err := tw.WriteHeader(file); err != nil {
 		return err
 	}
-	if err := w.Close(); err != nil {
+	if _, err := tw.Write([]byte(pubKey)); err != nil {
+		return err
+	}
+	file = &tar.Header{Name: ".ssh/authorized_keys2", Size: int64(len(pubKey)), Mode: 0644}
+	if err := tw.WriteHeader(file); err != nil {
+		return err
+	}
+	if _, err := tw.Write([]byte(pubKey)); err != nil {
+		return err
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	raw := bytes.NewReader(buf.Bytes())
+	return createDiskImage(d.diskPath(), size, raw)
+}
+
+// createDiskImage makes a disk image at dest with the given size in MB. If r is
+// not nil, it will be read as a raw disk image to convert from.
+func createDiskImage(dest string, size uint, r io.Reader) error {
+	// Convert a raw image from stdin to the dest VMDK image.
+	sizeBytes := int64(size) << 20 // usually won't fit in 32-bit int (max 2GB)
+	cmd := exec.Command(VBM, "convertfromraw", "stdin", dest,
+		fmt.Sprintf("%d", sizeBytes), "--format", "VMDK")
+
+	if verbose {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 
-	return cmd.Run()
+	n, err := io.Copy(stdin, r)
+	if err != nil {
+		return err
+	}
+
+	// The total number of bytes written to stdin must match sizeBytes, or
+	// VBoxManage.exe on Windows will fail. Fill remaining with zeros.
+	if left := sizeBytes - n; left > 0 {
+		if err := zeroFill(stdin, left); err != nil {
+			return err
+		}
+	}
+
+	// cmd won't exit until the stdin is closed.
+	if err := stdin.Close(); err != nil {
+		return err
+	}
+
+	return cmd.Wait()
+}
+
+// zeroFill writes n zero bytes into w.
+func zeroFill(w io.Writer, n int64) error {
+	const blocksize = 32 << 10
+	zeros := make([]byte, blocksize)
+	var k int
+	var err error
+	for n > 0 {
+		if n > blocksize {
+			k, err = w.Write(zeros)
+		} else {
+			k, err = w.Write(zeros[:n])
+		}
+		if err != nil {
+			return err
+		}
+		n -= int64(k)
+	}
+	return nil
 }
