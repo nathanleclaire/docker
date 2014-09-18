@@ -195,7 +195,12 @@ func (d *Driver) Create() error {
 }
 
 func (d *Driver) Start() error {
-	return vbm("startvm", d.MachineName, "--type", "headless")
+	if err := vbm("startvm", d.MachineName, "--type", "headless"); err != nil {
+		return err
+	}
+	log.Infof("Waiting for host to start...")
+	addr := fmt.Sprintf("localhost:%d", d.SSHPort)
+	return waitForTCP(addr)
 }
 
 func (d *Driver) Stop() error {
@@ -491,6 +496,18 @@ func zeroFill(w io.Writer, n int64) error {
 			return err
 		}
 		n -= int64(k)
+	}
+	return nil
+}
+
+func waitForTCP(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err = conn.Read(make([]byte, 1)); err != nil {
+		return err
 	}
 	return nil
 }
