@@ -52,14 +52,21 @@ func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
 		return err
 	}
 
+	daemon.containerGraph.Set(config.Name, "group-"+config.Name)
+
 	for name, c := range config.Containers {
-		container, _, err := daemon.Create(c.AsRunConfig(), config.Name+"-"+name)
+		container, _, err := daemon.Create(c.AsRunConfig(), "")
 		if err != nil {
 			// TODO: atomic abort and cleanup??????
 			return err
 		}
 
 		container.Group = config.Name
+		if err := container.ToDisk(); err != nil {
+			return err
+		}
+
+		daemon.containerGraph.Set(filepath.Join(config.Name, name), container.ID)
 
 		log.Printf("group %s container %s with id%s\n", config.Name, name, container.ID)
 	}
@@ -88,7 +95,7 @@ func (daemon *Daemon) StartGroup(name string) error {
 
 	containers := []*Container{}
 	for name := range config.Containers {
-		c := daemon.Get(config.Name + "-" + name)
+		c := daemon.Get(filepath.Join(config.Name, name))
 		if c == nil {
 			return fmt.Errorf("container does not exist for group %s", name)
 		}

@@ -209,7 +209,19 @@ func (daemon *Daemon) envForContainer(container *Container, names nameMap, optio
 	out := &engine.Env{}
 	out.Set("Type", "container")
 	out.Set("Id", container.ID)
-	out.SetList("Names", names[container.ID])
+
+	if container.Group == "" {
+		out.SetList("Names", names[container.ID])
+	} else {
+		var nestedNames []string
+		for _, name := range names[container.ID] {
+			if strings.Index(name, "/"+container.Group+"/") == 0 {
+				nestedNames = append(nestedNames, name)
+			}
+		}
+		out.SetList("Names", nestedNames)
+	}
+
 	out.Set("Image", daemon.Repositories().ImageName(container.Image))
 	if len(container.Args) > 0 {
 		args := []string{}
