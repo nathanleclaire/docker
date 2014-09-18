@@ -77,7 +77,10 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		hostURL = host.Driver.GetURL()
+		hostURL, err = host.Driver.GetURL()
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	protoAddrParts := strings.SplitN(hostURL, "://", 2)

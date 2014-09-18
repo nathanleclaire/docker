@@ -54,8 +54,8 @@ func (d *Driver) LoadOptions(options map[string]string) {
 	d.DockerPort = 4243
 }
 
-func (d *Driver) GetURL() string {
-	return ""
+func (d *Driver) GetURL() (string, error) {
+	return "", nil
 }
 
 func (d *Driver) Create() error {

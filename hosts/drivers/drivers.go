@@ -11,7 +11,7 @@ import (
 type Driver interface {
 	DriverName() string
 	GetOptions() map[string]string
-	GetURL() string
+	GetURL() (string, error)
 	Create() error
 	Remove() error
 	Start() error

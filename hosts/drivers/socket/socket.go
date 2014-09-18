@@ -25,8 +25,8 @@ func (d *Driver) GetOptions() map[string]string {
 	return map[string]string{"url": d.url}
 }
 
-func (d *Driver) GetURL() string {
-	return d.url
+func (d *Driver) GetURL() (string, error) {
+	return d.url, nil
 }
 
 func (d *Driver) Create() error {
