@@ -119,8 +119,6 @@ func (d *Driver) Create() error {
 		"--vtxvpid", "on",
 		"--vtxux", "off",
 		"--accelerate3d", "off",
-		"--uart1", "0x3F8", "4",
-		// "--uartmode1", "server", m.SerialFile,
 		"--boot1", "dvd"); err != nil {
 		return err
 	}
