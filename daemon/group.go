@@ -24,17 +24,23 @@ type Group struct {
 // create hosts file
 // create volumes dir
 func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
-	groupRoot := filepath.Join(daemon.Config().Root, "groups", config.Name)
+	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
 
-	if err := os.Mkdir(groupRoot, 0644); err != nil {
+	if err := os.MkdirAll(groupsRoot, 0644); err != nil {
 		return err
 	}
 
-	if err := os.Mkdir(filepath.Join(groupRoot, "volumes"), 0644); err != nil {
+	groupDir := filepath.Join(groupsRoot, config.Name)
+
+	if err := os.Mkdir(groupDir, 0644); err != nil {
 		return err
 	}
 
-	f, err := os.Create(filepath.Join(groupRoot, "config.json"))
+	if err := os.Mkdir(filepath.Join(groupDir, "volumes"), 0644); err != nil {
+		return err
+	}
+
+	f, err := os.Create(filepath.Join(groupDir, "config.json"))
 	if err != nil {
 		return err
 	}
@@ -145,9 +151,14 @@ func (daemon *Daemon) StartGroup(name string) error {
 }
 
 func (daemon *Daemon) Groups() ([]*Group, error) {
+	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
+
+	if err := os.MkdirAll(groupsRoot, 0644); err != nil {
+		return []*Group{}, err
+	}
+
 	groups := []*Group{}
 
-	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
 	files, err := ioutil.ReadDir(groupsRoot)
 	if err != nil {
 		return []*Group{}, err
