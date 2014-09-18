@@ -94,7 +94,7 @@ func (daemon *Daemon) StartGroup(name string) error {
 	lines := []string{}
 
 	containers := []*Container{}
-	for name := range config.Containers {
+	for name, containerConfig := range config.Containers {
 		c := daemon.Get(filepath.Join(config.Name, name))
 		if c == nil {
 			return fmt.Errorf("container does not exist for group %s", name)
@@ -108,7 +108,7 @@ func (daemon *Daemon) StartGroup(name string) error {
 			return err
 		}
 
-		network, err := allocateNetwork(daemon.eng, name)
+		network, err := allocateNetwork(daemon.eng, c.ID)
 		if err != nil {
 			return err
 		}
@@ -119,6 +119,15 @@ func (daemon *Daemon) StartGroup(name string) error {
 		c.NetworkSettings.IPAddress = network.IP
 		c.NetworkSettings.IPPrefixLen = network.Len
 		c.NetworkSettings.Gateway = network.Gateway
+
+		for port := range containerConfig.ExposedPorts {
+			if err := c.allocatePort(daemon.eng, port, containerConfig.PortBindings); err != nil {
+				return err
+			}
+		}
+
+		c.NetworkSettings.PortMapping = nil
+		c.NetworkSettings.Ports = containerConfig.PortBindings
 
 		if err := c.buildHostnameAndHostsFiles(c.NetworkSettings.IPAddress); err != nil {
 			return err

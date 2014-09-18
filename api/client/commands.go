@@ -2144,31 +2144,18 @@ func (cli *DockerCli) parseGroupConfig(cmd *flag.FlagSet) error {
 		return err
 	}
 
-	var group *runconfig.GroupConfig
-	if err := yaml.Unmarshal(data, &group); err != nil {
+	var groupInput *runconfig.GroupConfigInput
+	if err := yaml.Unmarshal(data, &groupInput); err != nil {
 		return err
 	}
 
-	if err := validateGroupConfig(group); err != nil {
+	group, err := groupInput.AsGroupConfig()
+	if err != nil {
 		return err
 	}
 
 	if _, _, err := cli.call("POST", "/groups/run", group, true); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func validateGroupConfig(group *runconfig.GroupConfig) (err error) {
-	for _, c := range group.Containers {
-		for _, v := range c.Volumes {
-			if v.Name == "." {
-				if v.Name, err = os.Getwd(); err != nil {
-					return err
-				}
-			}
-		}
 	}
 
 	return nil
