@@ -206,7 +206,7 @@ func (d *Driver) Stop() error {
 		return err
 	}
 	for {
-		s, err := d.State()
+		s, err := d.GetState()
 		if err != nil {
 			return err
 		}
@@ -220,7 +220,7 @@ func (d *Driver) Stop() error {
 }
 
 func (d *Driver) Remove() error {
-	s, err := d.State()
+	s, err := d.GetState()
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func (d *Driver) Kill() error {
 	return vbm("controlvm", d.MachineName, "poweroff")
 }
 
-func (d *Driver) State() (state.State, error) {
+func (d *Driver) GetState() (state.State, error) {
 	stdout, stderr, err := vbmOutErr("showvminfo", d.MachineName,
 		"--machinereadable")
 	if err != nil {

@@ -33,6 +33,10 @@ func (d *Driver) GetIP() (string, error) {
 	return "", nil
 }
 
+func (d *Driver) GetState() (state.State, error) {
+	return state.Unknown, nil
+}
+
 func (d *Driver) Create() error {
 	return nil
 }
@@ -55,8 +59,4 @@ func (d *Driver) Restart() error {
 
 func (d *Driver) Kill() error {
 	return nil
-}
-
-func (d *Driver) State() (state.State, error) {
-	return state.Unknown, nil
 }
