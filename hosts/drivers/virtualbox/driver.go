@@ -27,6 +27,7 @@ type Driver struct {
 	DockerPort  uint
 	SSHPort     uint
 	Memory      uint // main memory (in MB)
+	DiskSize    uint // in GB
 	HostIP      string
 	LowerIP     string
 	UpperIP     string
@@ -55,6 +56,7 @@ func (d *Driver) LoadOptions(options map[string]string) {
 	// }
 	d.SSHPort = 2223
 	d.HostIP = "192.168.60.1"
+	d.DiskSize = 20000
 }
 
 func (d *Driver) GetURL() (string, error) {
@@ -87,7 +89,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	if err := d.generateDiskImage(10); err != nil {
+	if err := d.generateDiskImage(d.DiskSize); err != nil {
 		return err
 	}
 
