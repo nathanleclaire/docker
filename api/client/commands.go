@@ -2506,6 +2506,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 	for _, command := range [][]string{
 		{"create", "Create a host"},
 		{"ip", "Get the IP address of a host"},
+		{"kill", "Kill a host"},
 		{"list", "List hosts (default)"},
 		{"restart", "Restart a host"},
 		{"rm", "Remove a host"},
@@ -2702,4 +2703,23 @@ func (cli *DockerCli) CmdHostsRestart(args ...string) error {
 		return err
 	}
 	return host.Driver.Restart()
+}
+
+func (cli *DockerCli) CmdHostsKill(args ...string) error {
+	cmd := cli.Subcmd("hosts kill", "NAME", "Kill a host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+	if cmd.NArg() < 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	store := hosts.NewStore()
+
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+	return host.Driver.Kill()
 }

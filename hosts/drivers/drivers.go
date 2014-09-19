@@ -19,7 +19,7 @@ type Driver interface {
 	State() (state.State, error)
 	Stop() error
 	Restart() error
-	// Kill() error
+	Kill() error
 	// Pause() error
 }
 
