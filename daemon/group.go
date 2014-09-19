@@ -7,45 +7,85 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/nat"
 	"github.com/docker/docker/runconfig"
 )
 
-type Group struct {
-	runconfig.GroupConfig
+func (daemon *Daemon) GroupsCreate(config *api.Group) error {
+	if config.Name == "" {
+		return fmt.Errorf("group name cannot be empty")
+	}
 
-	Created time.Time
-}
+	config.Created = time.Now()
 
-func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
 	if err := daemon.createGroup(config); err != nil {
 		return err
 	}
 
-	for containerName, containerConfig := range config.Containers {
-		daemon.createGroupContainer(config.Name, containerName, containerConfig)
+	for _, c := range config.Containers {
+		if err := daemon.createGroupContainer(config.Name, c); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-func (daemon *Daemon) createGroup(config *runconfig.GroupConfig) error {
-	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
+func (daemon *Daemon) GroupsStop(name string) error {
+	containers, err := daemon.fetchGroupsContainers(name)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range containers {
+		if err := c.Stop(10); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) GroupsDelete(name string) error {
+	containers, err := daemon.fetchGroupsContainers(name)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range containers {
+		if err := daemon.eng.Job("rm", c.ID).Run(); err != nil {
+			return err
+		}
+	}
+
+	if err := os.RemoveAll(filepath.Join(daemon.Config().Root, "groups", name)); err != nil {
+		return err
+	}
+
+	if _, err := daemon.containerGraph.Purge(name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) createGroup(config *api.Group) error {
+	var (
+		groupsRoot = filepath.Join(daemon.Config().Root, "groups")
+		groupDir   = filepath.Join(groupsRoot, config.Name)
+	)
 
 	if err := os.MkdirAll(groupsRoot, 0644); err != nil {
 		return err
 	}
 
-	groupDir := filepath.Join(groupsRoot, config.Name)
-
 	if err := os.Mkdir(groupDir, 0644); err != nil {
-		return err
-	}
-
-	if err := os.Mkdir(filepath.Join(groupDir, "volumes"), 0644); err != nil {
 		return err
 	}
 
@@ -55,23 +95,55 @@ func (daemon *Daemon) createGroup(config *runconfig.GroupConfig) error {
 	}
 	defer f.Close()
 
-	group := &Group{GroupConfig: *config, Created: time.Now()}
-
-	if err := json.NewEncoder(f).Encode(group); err != nil {
+	if err := json.NewEncoder(f).Encode(config); err != nil {
 		return err
 	}
 
-	daemon.containerGraph.Set(config.Name, "group-"+config.Name)
+	if _, err := daemon.containerGraph.Set("group-"+config.Name, config.Name); err != nil {
+		return fmt.Errorf("path: %s id: %s: %s", "group-"+config.Name, config.Name, err)
+	}
 
 	return nil
 }
 
-func (daemon *Daemon) createGroupContainer(groupName string, containerName string, containerConfig *runconfig.GroupContainer) error {
-	fullName := filepath.Join(groupName, containerName)
+func asRunConfig(c *api.Container) *runconfig.Config {
+	r := &runconfig.Config{
+		Image:        c.Image,
+		Cmd:          c.Command,
+		ExposedPorts: make(map[nat.Port]struct{}),
+		Volumes:      make(map[string]struct{}),
+	}
 
-	container, _, err := daemon.Create(containerConfig.AsRunConfig(), "")
+	for _, p := range c.Ports {
+		proto := p.Proto
+		if proto == "" {
+			proto = "tcp"
+		}
+
+		r.ExposedPorts[nat.Port(fmt.Sprintf("%d/%s", p.Container, proto))] = struct{}{}
+	}
+
+	for _, v := range c.Volumes {
+		r.Volumes[v.Container] = struct{}{}
+	}
+
+	return r
+}
+
+func (daemon *Daemon) createGroupContainer(groupName string, c *api.Container) error {
+	// do not pass a container name here and let docker auto generate the default name
+	// we will set the name scoped to the group later
+	container, _, err := daemon.Create(asRunConfig(c), "")
 	if err != nil {
 		// TODO: atomic abort and cleanup??????
+		return err
+	}
+
+	if err := setHostConfig(c, container); err != nil {
+		return err
+	}
+
+	if err := container.WriteHostConfig(); err != nil {
 		return err
 	}
 
@@ -80,16 +152,19 @@ func (daemon *Daemon) createGroupContainer(groupName string, containerName strin
 		return err
 	}
 
-	daemon.containerGraph.Set(fullName, container.ID)
+	fullName := filepath.Join("group-"+groupName, c.Name)
+	if _, err := daemon.containerGraph.Set(fullName, container.ID); err != nil {
+		return fmt.Errorf("%s %s: %s", fullName, container.ID, err)
+	}
 
 	log.Printf("created %s (%s)\n", fullName, container.ID)
 
 	return nil
 }
 
-func (daemon *Daemon) groupConfig(name string) (*runconfig.GroupConfig, error) {
+func (daemon *Daemon) fetchGroupConfig(name string) (*api.Group, error) {
 	var (
-		config    *runconfig.GroupConfig
+		config    *api.Group
 		groupRoot = filepath.Join(daemon.Config().Root, "groups", name)
 	)
 
@@ -106,17 +181,17 @@ func (daemon *Daemon) groupConfig(name string) (*runconfig.GroupConfig, error) {
 	return config, nil
 }
 
-func (daemon *Daemon) groupContainers(name string) ([]*Container, error) {
-	config, err := daemon.groupConfig(name)
+func (daemon *Daemon) fetchGroupsContainers(name string) ([]*Container, error) {
+	config, err := daemon.fetchGroupConfig(name)
 	if err != nil {
 		return nil, err
 	}
 
 	containers := []*Container{}
-	for name := range config.Containers {
-		c := daemon.Get(filepath.Join(config.Name, name))
+	for _, cconfig := range config.Containers {
+		c := daemon.Get(filepath.Join("group-"+config.Name, cconfig.Name))
 		if c == nil {
-			return nil, fmt.Errorf("container does not exist for group %s", name)
+			return nil, fmt.Errorf("container does not exist for group %s", cconfig.Name)
 		}
 
 		containers = append(containers, c)
@@ -125,14 +200,36 @@ func (daemon *Daemon) groupContainers(name string) ([]*Container, error) {
 	return containers, nil
 }
 
-func (daemon *Daemon) StartGroup(name string) error {
+func setHostConfig(c *api.Container, cc *Container) error {
+	if cc.hostConfig.PortBindings == nil {
+		cc.hostConfig.PortBindings = nat.PortMap{}
+	}
+
+	// volumes and port bindings
+	for p := range cc.Config.ExposedPorts {
+	ports:
+		for _, pp := range c.Ports {
+			if p.Int() == pp.Container {
+				cc.hostConfig.PortBindings[p] = append(cc.hostConfig.PortBindings[p], nat.PortBinding{
+					HostPort: strconv.Itoa(pp.Host),
+				})
+
+				break ports
+			}
+		}
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) GroupsStart(name string) error {
 	var (
 		lines     = []string{}
 		groupRoot = filepath.Join(daemon.Config().Root, "groups", name)
 		hostsPath = filepath.Join(groupRoot, "hosts")
 	)
 
-	containers, err := daemon.groupContainers(name)
+	containers, err := daemon.fetchGroupsContainers(name)
 	if err != nil {
 		return err
 	}
@@ -202,15 +299,10 @@ func (daemon *Daemon) StartGroup(name string) error {
 	return nil
 }
 
-func (daemon *Daemon) Groups() ([]*Group, error) {
+func (daemon *Daemon) GroupsGet(name string) ([]*api.Group, error) {
 	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
 
-	if err := os.MkdirAll(groupsRoot, 0644); err != nil {
-		return nil, err
-	}
-
-	groups := []*Group{}
-
+	groups := []*api.Group{}
 	files, err := ioutil.ReadDir(groupsRoot)
 	if err != nil {
 		return nil, err
@@ -218,19 +310,23 @@ func (daemon *Daemon) Groups() ([]*Group, error) {
 
 	for _, file := range files {
 		if file.Mode().IsDir() {
-			groupRoot := filepath.Join(groupsRoot, file.Name())
-			f, err := os.Open(filepath.Join(groupRoot, "config.json"))
-			if err != nil {
-				return nil, err
-			}
-			defer f.Close()
+			if name == "" || name == file.Name() {
+				groupRoot := filepath.Join(groupsRoot, file.Name())
 
-			group := &Group{}
-			if err := json.NewDecoder(f).Decode(group); err != nil {
-				return nil, err
-			}
+				f, err := os.Open(filepath.Join(groupRoot, "config.json"))
+				if err != nil {
+					return nil, err
+				}
 
-			groups = append(groups, group)
+				var group *api.Group
+				if err := json.NewDecoder(f).Decode(&group); err != nil {
+					f.Close()
+					return nil, err
+				}
+				f.Close()
+
+				groups = append(groups, group)
+			}
 		}
 	}
 

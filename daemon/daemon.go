@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -763,6 +764,10 @@ func NewDaemonFromDirectory(config *Config, eng *engine.Engine) (*Daemon, error)
 	config.Root = realRoot
 	// Create the root directory if it doesn't exists
 	if err := os.MkdirAll(config.Root, 0700); err != nil && !os.IsExist(err) {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Join(config.Root, "groups"), 0700); err != nil {
 		return nil, err
 	}
 

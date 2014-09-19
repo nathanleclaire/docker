@@ -28,8 +28,6 @@ type listOptions struct {
 }
 
 func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
-	groupName := job.Getenv("group")
-
 	options := listOptions{
 		all:    job.GetenvBool("all"),
 		since:  job.Getenv("since"),
@@ -68,14 +66,8 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 
 	outs := engine.NewTable("Created", 0)
 
-	if groupName == "" {
-		if err := daemon.listTopLevelContainersAndGroups(outs, options); err != nil {
-			return job.Error(err)
-		}
-	} else {
-		if err := daemon.listGroupContainers(outs, groupName, options); err != nil {
-			return job.Error(err)
-		}
+	if err := daemon.listTopLevelContainersAndGroups(outs, options); err != nil {
+		return job.Error(err)
 	}
 
 	outs.ReverseSort()
@@ -88,40 +80,14 @@ func (daemon *Daemon) Containers(job *engine.Job) engine.Status {
 func (daemon *Daemon) listTopLevelContainersAndGroups(outs *engine.Table, options listOptions) error {
 	var (
 		ungroupedContainers []*Container
-		groupedContainers   = make(map[string][]*Container)
 	)
 
 	for _, container := range filterContainers(daemon.List(), options) {
-		if container.Group != "" {
-			groupedContainers[container.Group] = append(groupedContainers[container.Group], container)
-		} else {
-			ungroupedContainers = append(ungroupedContainers, container)
-		}
+		ungroupedContainers = append(ungroupedContainers, container)
 	}
 
 	if err := daemon.listContainers(outs, ungroupedContainers, options); err != nil {
 		return err
-	}
-
-	groups, err := daemon.Groups()
-	if err != nil {
-		return err
-	}
-
-	for _, group := range groups {
-		out := &engine.Env{}
-
-		out.Set("Type", "group")
-		out.SetList("Names", []string{"/" + group.Name + "/"})
-		out.SetInt64("Created", group.Created.Unix())
-		out.Set("Status", fmt.Sprintf("%d containers", len(groupedContainers[group.Name])))
-		out.SetList("Ports", []string{})
-
-		out.Set("Id", "")
-		out.Set("Image", "")
-		out.Set("Command", "")
-
-		outs.Add(out)
 	}
 
 	return nil
@@ -210,18 +176,7 @@ func (daemon *Daemon) envForContainer(container *Container, names nameMap, optio
 	out.Set("Type", "container")
 	out.Set("Id", container.ID)
 
-	if container.Group == "" {
-		out.SetList("Names", names[container.ID])
-	} else {
-		var nestedNames []string
-		for _, name := range names[container.ID] {
-			if strings.Index(name, "/"+container.Group+"/") == 0 {
-				nestedNames = append(nestedNames, name)
-			}
-		}
-		out.SetList("Names", nestedNames)
-	}
-
+	out.SetList("Names", names[container.ID])
 	out.Set("Image", daemon.Repositories().ImageName(container.Image))
 	if len(container.Args) > 0 {
 		args := []string{}

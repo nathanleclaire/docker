@@ -32,7 +32,6 @@ import (
 	"github.com/docker/docker/pkg/systemd"
 	"github.com/docker/docker/pkg/version"
 	"github.com/docker/docker/registry"
-	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
 )
 
@@ -1132,26 +1131,62 @@ func postContainerExecResize(eng *engine.Engine, version version.Version, w http
 	return nil
 }
 
-func postGroupsRun(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	var config *runconfig.GroupConfig
+func postGroupsCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var config *api.Group
 	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
 		return err
 	}
 
 	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
-		CreateGroup(*runconfig.GroupConfig) error
-		StartGroup(string) error
+		GroupsCreate(*api.Group) error
 	})
 
-	if err := daemon.CreateGroup(config); err != nil {
+	return daemon.GroupsCreate(config)
+}
+
+func getGroups(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	name := vars["name"]
+
+	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
+		GroupsGet(string) ([]*api.Group, error)
+	})
+
+	groups, err := daemon.GroupsGet(name)
+	if err != nil {
 		return err
 	}
 
-	if err := daemon.StartGroup(config.Name); err != nil {
-		return err
-	}
+	return json.NewEncoder(w).Encode(groups)
+}
 
-	return nil
+func postGroupsStop(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	name := vars["name"]
+
+	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
+		GroupsStop(string) error
+	})
+
+	return daemon.GroupsStop(name)
+}
+
+func postGroupsStart(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	name := vars["name"]
+
+	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
+		GroupsStart(string) error
+	})
+
+	return daemon.GroupsStart(name)
+}
+
+func deleteGroups(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	name := vars["name"]
+
+	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
+		GroupsDelete(string) error
+	})
+
+	return daemon.GroupsDelete(name)
 }
 
 func optionsHandler(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -1256,6 +1291,8 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, dockerVersion st
 			"/containers/{name:.*}/top":       getContainersTop,
 			"/containers/{name:.*}/logs":      getContainersLogs,
 			"/containers/{name:.*}/attach/ws": wsContainersAttach,
+			"/groups/json":                    getGroups,
+			"/groups/{name:.*}/json":          getGroups,
 		},
 		"POST": {
 			"/auth":                         postAuth,
@@ -1279,11 +1316,14 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, dockerVersion st
 			"/containers/{name:.*}/exec":    postContainerExecCreate,
 			"/exec/{name:.*}/start":         postContainerExecStart,
 			"/exec/{name:.*}/resize":        postContainerExecResize,
-			"/groups/run":                   postGroupsRun,
+			"/groups/create":                postGroupsCreate,
+			"/groups/{name:.*}/start":       postGroupsStart,
+			"/groups/{name:.*}/stop":        postGroupsStop,
 		},
 		"DELETE": {
 			"/containers/{name:.*}": deleteContainers,
 			"/images/{name:.*}":     deleteImages,
+			"/groups/{name:.*}":     deleteGroups,
 		},
 		"OPTIONS": {
 			"": optionsHandler,

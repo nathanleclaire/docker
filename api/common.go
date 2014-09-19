@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"mime"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/pkg/log"
@@ -46,4 +47,31 @@ func MatchesContentType(contentType, expectedType string) bool {
 		log.Errorf("Error parsing media type: %s error: %s", contentType, err.Error())
 	}
 	return err == nil && mimetype == expectedType
+}
+
+type Volume struct {
+	Container string
+	Host      string
+	Mode      string
+}
+
+type Port struct {
+	Proto     string
+	Container int
+	Host      int
+}
+
+type Container struct {
+	Name    string
+	Image   string
+	Volumes []*Volume
+	Ports   []*Port
+	Links   []string
+	Command []string
+}
+
+type Group struct {
+	Name       string
+	Containers []*Container
+	Created    time.Time
 }

@@ -2,9 +2,10 @@ package client
 
 import (
 	"fmt"
+	"strconv"
 
+	"github.com/docker/docker/api"
 	"github.com/docker/docker/nat"
-	"github.com/docker/docker/runconfig"
 )
 
 type GroupContainer struct {
@@ -24,14 +25,15 @@ type GroupConfig struct {
 //  - automatically building images
 //  - parsing port specs
 //
-func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*runconfig.GroupConfig, error) {
-	group := &runconfig.GroupConfig{
-		Name:       raw.Name,
-		Containers: make(map[string]*runconfig.GroupContainer),
+func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*api.Group, error) {
+	group := &api.Group{
+		Name: raw.Name,
 	}
 
 	for containerName, c := range raw.Containers {
-		container := &runconfig.GroupContainer{}
+		container := &api.Container{
+			Name: containerName,
+		}
 
 		if c.Build != "" {
 			if c.Image != "" {
@@ -70,15 +72,35 @@ func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*runconfig.GroupConf
 
 		container.Command = c.Command
 
-		exposedPorts, portBindings, err := nat.ParsePortSpecs(c.Ports)
+		_, portBindings, err := nat.ParsePortSpecs(c.Ports)
 		if err != nil {
 			return nil, err
 		}
 
-		container.ExposedPorts = exposedPorts
-		container.PortBindings = portBindings
+		for p, b := range portBindings {
+			pp := &api.Port{
+				Container: p.Int(),
+				Proto:     p.Proto(),
+			}
 
-		group.Containers[containerName] = container
+			if len(b) > 0 {
+				// FIXME: support more than one
+				bb := b[0]
+
+				hp, err := strconv.Atoi(bb.HostPort)
+				if err != nil {
+					return nil, err
+				}
+
+				pp.Host = hp
+			}
+
+			container.Ports = append(container.Ports, pp)
+		}
+
+		// TODO: volumes....
+
+		group.Containers = append(group.Containers, container)
 	}
 
 	return group, nil

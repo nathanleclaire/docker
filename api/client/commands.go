@@ -1483,7 +1483,7 @@ func (cli *DockerCli) printTreeNode(noTrunc bool, image *engine.Env, prefix stri
 }
 
 func (cli *DockerCli) CmdPs(args ...string) error {
-	cmd := cli.Subcmd("ps", "[GROUP]", "List containers")
+	cmd := cli.Subcmd("ps", "", "List containers")
 	quiet := cmd.Bool([]string{"q", "-quiet"}, false, "Only display numeric IDs")
 	size := cmd.Bool([]string{"s", "-size"}, false, "Display sizes")
 	all := cmd.Bool([]string{"a", "-all"}, false, "Show all containers. Only running containers are shown by default.")
@@ -1503,7 +1503,6 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 		cmd.Usage()
 		return nil
 	}
-	groupName := cmd.Arg(0)
 
 	v := url.Values{}
 	if *last == -1 && *nLatest {
@@ -1523,9 +1522,6 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 	}
 	if *size {
 		v.Set("size", "1")
-	}
-	if groupName != "" {
-		v.Set("group", groupName)
 	}
 
 	// Consolidate all filter flags, and sanity check them.
@@ -1588,7 +1584,9 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 			outCommand = strconv.Quote(outCommand)
 			if !*noTrunc {
 				outCommand = utils.Trunc(outCommand, 20)
-				outNamesList = outNames[0]
+				if len(outNames) > 0 {
+					outNamesList = outNames[0]
+				}
 			}
 			ports.ReadListFrom([]byte(out.Get("Ports")))
 
@@ -2146,34 +2144,6 @@ func (cli *DockerCli) CmdCreate(args ...string) error {
 	return nil
 }
 
-func (cli *DockerCli) parseGroupConfig(cmd *flag.FlagSet) error {
-	data, err := ioutil.ReadFile("group.yml")
-	if err != nil {
-		if os.IsNotExist(err) {
-			cmd.Usage()
-			return nil
-		}
-
-		return err
-	}
-
-	var raw *GroupConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	processed, err := cli.processGroupConfig(raw)
-	if err != nil {
-		return err
-	}
-
-	if _, _, err := cli.call("POST", "/groups/run", processed, true); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (cli *DockerCli) CmdRun(args ...string) error {
 	// FIXME: just use runconfig.Parse already
 	cmd := cli.Subcmd("run", "IMAGE [COMMAND] [ARG...]", "Run a command in a new container")
@@ -2195,8 +2165,10 @@ func (cli *DockerCli) CmdRun(args ...string) error {
 	if err != nil {
 		return err
 	}
+
 	if config.Image == "" {
-		return cli.parseGroupConfig(cmd)
+		cmd.Usage()
+		return nil
 	}
 
 	if *flDetach {
@@ -2575,4 +2547,203 @@ func (cli *DockerCli) CmdExec(args ...string) error {
 	}
 
 	return nil
+}
+
+func (cli *DockerCli) CmdGroups(args ...string) error {
+	description := "Manage Docker groups\n\nCommands:\n"
+	for _, command := range [][]string{
+		{"create", "Create a new group"},
+		{"list", "List all groups"},
+		{"rm", "Remove a group and all of it's containers"},
+		{"start", "Start all the container's in the group"},
+		{"stop", "Stop all the container's in the group"},
+		{"containers", "List all containers in a group"},
+	} {
+		description += fmt.Sprintf("    %-10.10s%s\n", command[0], command[1])
+	}
+
+	description += "\nRun 'docker groups COMMAND --help' for more information on a command."
+
+	cmd := cli.Subcmd("groups", "[COMMAND]", description)
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() == 0 {
+		return cli.CmdGroupsList(args...)
+	}
+
+	cmd.Usage()
+	return nil
+}
+
+func (cli *DockerCli) CmdGroupsList(args ...string) error {
+	cmd := cli.Subcmd("groups list ", "[NAME]", "List all groups")
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	var (
+		name = cmd.Arg(0)
+		url  = filepath.Join("/groups", name, "json")
+	)
+
+	response, _, err := cli.call("GET", url, nil, true)
+	if err != nil {
+		return err
+	}
+	defer response.Close()
+
+	var groups []*api.Group
+	if err := json.NewDecoder(response).Decode(&groups); err != nil {
+		return err
+	}
+
+	w := tabwriter.NewWriter(cli.out, 20, 1, 3, ' ', 0)
+	if name != "" {
+		fmt.Fprintln(w, "NAME\tIMAGE\tCOMMAND\tPORTS")
+		for _, g := range groups {
+			if g.Name == name {
+				for _, c := range g.Containers {
+					ports := []string{}
+					for _, p := range c.Ports {
+						ports = append(ports, fmt.Sprintf("%d->%d", p.Container, p.Host))
+					}
+
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", c.Name, c.Image, strings.Join(c.Command, " "), strings.Join(ports, ","))
+				}
+			}
+		}
+	} else {
+		fmt.Fprintln(w, "NAME\tCREATED\tCONTAINERS")
+
+		for _, g := range groups {
+			fmt.Fprintf(w, "%s\t%s\t%d\n", g.Name, g.Created.Format(time.RubyDate), len(g.Containers))
+		}
+	}
+
+	return w.Flush()
+}
+
+func getNameFromGroupConfig() (string, error) {
+	config, err := loadGroupConfig()
+	if err != nil {
+		return "", err
+	}
+
+	return config.Name, nil
+}
+
+func (cli *DockerCli) CmdGroupsStart(args ...string) error {
+	cmd := cli.Subcmd("groups start ", "[NAME]", "Start all container's in the group")
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	var name string
+	if cmd.NArg() != 1 {
+		group, err := loadGroupConfig()
+		if err != nil {
+			cmd.Usage()
+			return nil
+		}
+
+		name = group.Name
+	} else {
+		name = cmd.Arg(0)
+	}
+
+	_, _, err := cli.call("POST", fmt.Sprintf("/groups/%s/start", name), nil, true)
+	return err
+}
+
+func (cli *DockerCli) CmdGroupsStop(args ...string) error {
+	cmd := cli.Subcmd("groups stop ", "[NAME]", "Stop all container's in the group")
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	var name string
+	if cmd.NArg() != 1 {
+		group, err := loadGroupConfig()
+		if err != nil {
+			cmd.Usage()
+			return nil
+		}
+
+		name = group.Name
+	} else {
+		name = cmd.Arg(0)
+	}
+
+	_, _, err := cli.call("POST", fmt.Sprintf("/groups/%s/stop", name), nil, true)
+	return err
+}
+
+func (cli *DockerCli) CmdGroupsRm(args ...string) error {
+	cmd := cli.Subcmd("groups rm ", "[NAME]", "Remove a group and all of it's containers")
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	var name string
+	if cmd.NArg() != 1 {
+		group, err := loadGroupConfig()
+		if err != nil {
+			cmd.Usage()
+			return nil
+		}
+
+		name = group.Name
+	} else {
+		name = cmd.Arg(0)
+	}
+
+	_, _, err := cli.call("DELETE", fmt.Sprintf("/groups/%s", name), nil, true)
+	return err
+}
+
+func loadGroupConfig() (*GroupConfig, error) {
+	data, err := ioutil.ReadFile("group.yml")
+	if err != nil {
+		return nil, err
+	}
+
+	var raw *GroupConfig
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	return raw, nil
+}
+
+func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
+	cmd := cli.Subcmd("groups create ", "", "Create a new group")
+
+	raw, err := loadGroupConfig()
+	if err != nil {
+		if os.IsNotExist(err) {
+			cmd.Usage()
+			return nil
+		}
+
+		return err
+	}
+
+	group, err := cli.processGroupConfig(raw)
+	if err != nil {
+		return err
+	}
+
+	if _, _, err := cli.call("POST", "/groups/create", group, true); err != nil {
+		return err
+	}
+
+	return nil
+
 }
