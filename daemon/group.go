@@ -20,10 +20,19 @@ type Group struct {
 	Created time.Time
 }
 
-// create root
-// create hosts file
-// create volumes dir
 func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
+	if err := daemon.createGroup(config); err != nil {
+		return err
+	}
+
+	for containerName, containerConfig := range config.Containers {
+		daemon.createGroupContainer(config.Name, containerName, containerConfig)
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) createGroup(config *runconfig.GroupConfig) error {
 	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
 
 	if err := os.MkdirAll(groupsRoot, 0644); err != nil {
@@ -54,22 +63,26 @@ func (daemon *Daemon) CreateGroup(config *runconfig.GroupConfig) error {
 
 	daemon.containerGraph.Set(config.Name, "group-"+config.Name)
 
-	for name, c := range config.Containers {
-		container, _, err := daemon.Create(c.AsRunConfig(), "")
-		if err != nil {
-			// TODO: atomic abort and cleanup??????
-			return err
-		}
+	return nil
+}
 
-		container.Group = config.Name
-		if err := container.ToDisk(); err != nil {
-			return err
-		}
+func (daemon *Daemon) createGroupContainer(groupName string, containerName string, containerConfig *runconfig.GroupContainer) error {
+	fullName := filepath.Join(groupName, containerName)
 
-		daemon.containerGraph.Set(filepath.Join(config.Name, name), container.ID)
-
-		log.Printf("group %s container %s with id%s\n", config.Name, name, container.ID)
+	container, _, err := daemon.Create(containerConfig.AsRunConfig(), "")
+	if err != nil {
+		// TODO: atomic abort and cleanup??????
+		return err
 	}
+
+	container.Group = groupName
+	if err := container.ToDisk(); err != nil {
+		return err
+	}
+
+	daemon.containerGraph.Set(fullName, container.ID)
+
+	log.Printf("created %s (%s)\n", fullName, container.ID)
 
 	return nil
 }
