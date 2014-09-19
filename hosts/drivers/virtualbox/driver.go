@@ -60,7 +60,7 @@ func (d *Driver) LoadOptions(options map[string]string) {
 }
 
 func (d *Driver) GetURL() (string, error) {
-	ip, err := d.getIPAddress()
+	ip, err := d.GetIP()
 	if err != nil {
 		return "", err
 	}
@@ -275,7 +275,7 @@ func (d *Driver) isISODownloaded() (bool, error) {
 	return true, nil
 }
 
-func (d *Driver) getIPAddress() (string, error) {
+func (d *Driver) GetIP() (string, error) {
 	cmd := d.getSSHCommand("ip addr show dev eth1")
 
 	b, err := cmd.Output()
