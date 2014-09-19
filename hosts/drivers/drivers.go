@@ -12,6 +12,7 @@ type Driver interface {
 	DriverName() string
 	GetOptions() map[string]string
 	GetURL() (string, error)
+	GetIP() (string, error)
 	Create() error
 	Remove() error
 	Start() error

@@ -29,6 +29,10 @@ func (d *Driver) GetURL() (string, error) {
 	return d.url, nil
 }
 
+func (d *Driver) GetIP() (string, error) {
+	return "", nil
+}
+
 func (d *Driver) Create() error {
 	return nil
 }
