@@ -22,10 +22,6 @@ import (
 	"github.com/docker/docker/utils"
 )
 
-var (
-	verbose = true
-)
-
 type Driver struct {
 	MachineName string
 	DockerPort  uint
@@ -446,7 +442,7 @@ func createDiskImage(dest string, size uint, r io.Reader) error {
 	cmd := exec.Command(VBM, "convertfromraw", "stdin", dest,
 		fmt.Sprintf("%d", sizeBytes), "--format", "VMDK")
 
-	if verbose {
+	if os.Getenv("DEBUG") != "" {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
