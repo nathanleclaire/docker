@@ -2507,6 +2507,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 		{"create", "Create a host"},
 		{"ip", "Get the IP address of a host"},
 		{"list", "List hosts (default)"},
+		{"restart", "Restart a host"},
 		{"rm", "Remove a host"},
 		{"start", "Start a host"},
 		{"stop", "Stop a host"},
@@ -2682,4 +2683,23 @@ func (cli *DockerCli) CmdHostsIp(args ...string) error {
 	fmt.Println(ip)
 
 	return nil
+}
+
+func (cli *DockerCli) CmdHostsRestart(args ...string) error {
+	cmd := cli.Subcmd("hosts restart", "NAME", "Restart a host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+	if cmd.NArg() < 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	store := hosts.NewStore()
+
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+	return host.Driver.Restart()
 }

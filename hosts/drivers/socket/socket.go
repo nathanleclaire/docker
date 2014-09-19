@@ -49,6 +49,10 @@ func (d *Driver) Remove() error {
 	return nil
 }
 
+func (d *Driver) Restart() error {
+	return nil
+}
+
 func (d *Driver) State() (state.State, error) {
 	return state.Unknown, nil
 }

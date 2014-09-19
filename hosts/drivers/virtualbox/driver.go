@@ -232,6 +232,13 @@ func (d *Driver) Remove() error {
 	return vbm("unregistervm", "--delete", d.MachineName)
 }
 
+func (d *Driver) Restart() error {
+	if err := d.Stop(); err != nil {
+		return err
+	}
+	return d.Start()
+}
+
 func (d *Driver) State() (state.State, error) {
 	stdout, stderr, err := vbmOutErr("showvminfo", d.MachineName,
 		"--machinereadable")
