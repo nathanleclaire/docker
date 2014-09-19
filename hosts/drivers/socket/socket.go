@@ -6,6 +6,8 @@ import (
 	"github.com/docker/docker/hosts/state"
 )
 
+// Driver is a socket host driver. It is used to connect to existing Docker
+// hosts by specifying the URL of the host as an option.
 type Driver struct {
 	url string
 }

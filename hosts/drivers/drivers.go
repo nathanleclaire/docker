@@ -8,6 +8,9 @@ import (
 	"github.com/docker/docker/hosts/state"
 )
 
+// Driver defines how a host is created and controlled. Different types of
+// driver represent different ways hosts can be created (e.g. different
+// hypervisors, different cloud providers)
 type Driver interface {
 	DriverName() string
 	GetOptions() map[string]string
@@ -23,6 +26,7 @@ type Driver interface {
 	// Pause() error
 }
 
+// NewDriver creates a new driver of type "name"
 func NewDriver(name string, options map[string]string, storePath string) (Driver, error) {
 	switch name {
 	case "socket":
