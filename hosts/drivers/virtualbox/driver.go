@@ -225,7 +225,7 @@ func (d *Driver) Remove() error {
 		return err
 	}
 	if s == state.Running {
-		if err := d.Stop(); err != nil {
+		if err := d.Kill(); err != nil {
 			return err
 		}
 	}
@@ -237,6 +237,10 @@ func (d *Driver) Restart() error {
 		return err
 	}
 	return d.Start()
+}
+
+func (d *Driver) Kill() error {
+	return vbm("controlvm", d.MachineName, "poweroff")
 }
 
 func (d *Driver) State() (state.State, error) {
