@@ -13,10 +13,10 @@ type Driver interface {
 	GetOptions() map[string]string
 	GetURL() (string, error)
 	GetIP() (string, error)
+	GetState() (state.State, error)
 	Create() error
 	Remove() error
 	Start() error
-	State() (state.State, error)
 	Stop() error
 	Restart() error
 	Kill() error
