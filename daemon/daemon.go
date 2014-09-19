@@ -147,9 +147,11 @@ func (daemon *Daemon) Get(name string) *Container {
 	if id, err := daemon.idIndex.Get(name); err == nil {
 		return daemon.containers.Get(id)
 	}
+
 	if c, _ := daemon.GetByName(name); c != nil {
 		return c
 	}
+
 	return nil
 }
 

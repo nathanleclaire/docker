@@ -87,32 +87,57 @@ func (daemon *Daemon) createGroupContainer(groupName string, containerName strin
 	return nil
 }
 
-func (daemon *Daemon) StartGroup(name string) error {
+func (daemon *Daemon) groupConfig(name string) (*runconfig.GroupConfig, error) {
 	var (
 		config    *runconfig.GroupConfig
 		groupRoot = filepath.Join(daemon.Config().Root, "groups", name)
-		hostsPath = filepath.Join(groupRoot, "hosts")
 	)
 
 	f, err := os.Open(filepath.Join(groupRoot, "config.json"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer f.Close()
 
 	if err := json.NewDecoder(f).Decode(&config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func (daemon *Daemon) groupContainers(name string) ([]*Container, error) {
+	config, err := daemon.groupConfig(name)
+	if err != nil {
+		return nil, err
+	}
+
+	containers := []*Container{}
+	for name := range config.Containers {
+		c := daemon.Get(filepath.Join(config.Name, name))
+		if c == nil {
+			return nil, fmt.Errorf("container does not exist for group %s", name)
+		}
+
+		containers = append(containers, c)
+	}
+
+	return containers, nil
+}
+
+func (daemon *Daemon) StartGroup(name string) error {
+	var (
+		lines     = []string{}
+		groupRoot = filepath.Join(daemon.Config().Root, "groups", name)
+		hostsPath = filepath.Join(groupRoot, "hosts")
+	)
+
+	containers, err := daemon.groupContainers(name)
+	if err != nil {
 		return err
 	}
 
-	lines := []string{}
-
-	containers := []*Container{}
-	for name, containerConfig := range config.Containers {
-		c := daemon.Get(filepath.Join(config.Name, name))
-		if c == nil {
-			return fmt.Errorf("container does not exist for group %s", name)
-		}
-
+	for _, c := range containers {
 		if err := c.setupContainerDns(); err != nil {
 			return err
 		}
@@ -133,14 +158,14 @@ func (daemon *Daemon) StartGroup(name string) error {
 		c.NetworkSettings.IPPrefixLen = network.Len
 		c.NetworkSettings.Gateway = network.Gateway
 
-		for port := range containerConfig.ExposedPorts {
-			if err := c.allocatePort(daemon.eng, port, containerConfig.PortBindings); err != nil {
+		for port := range c.Config.ExposedPorts {
+			if err := c.allocatePort(daemon.eng, port, c.hostConfig.PortBindings); err != nil {
 				return err
 			}
 		}
 
 		c.NetworkSettings.PortMapping = nil
-		c.NetworkSettings.Ports = containerConfig.PortBindings
+		c.NetworkSettings.Ports = c.hostConfig.PortBindings
 
 		if err := c.buildHostnameAndHostsFiles(c.NetworkSettings.IPAddress); err != nil {
 			return err
@@ -161,8 +186,6 @@ func (daemon *Daemon) StartGroup(name string) error {
 		if err := setupMountsForContainer(c); err != nil {
 			return err
 		}
-
-		containers = append(containers, c)
 	}
 
 	// write the groups hosts file
@@ -183,14 +206,14 @@ func (daemon *Daemon) Groups() ([]*Group, error) {
 	groupsRoot := filepath.Join(daemon.Config().Root, "groups")
 
 	if err := os.MkdirAll(groupsRoot, 0644); err != nil {
-		return []*Group{}, err
+		return nil, err
 	}
 
 	groups := []*Group{}
 
 	files, err := ioutil.ReadDir(groupsRoot)
 	if err != nil {
-		return []*Group{}, err
+		return nil, err
 	}
 
 	for _, file := range files {
@@ -198,13 +221,13 @@ func (daemon *Daemon) Groups() ([]*Group, error) {
 			groupRoot := filepath.Join(groupsRoot, file.Name())
 			f, err := os.Open(filepath.Join(groupRoot, "config.json"))
 			if err != nil {
-				return []*Group{}, err
+				return nil, err
 			}
 			defer f.Close()
 
 			group := &Group{}
 			if err := json.NewDecoder(f).Decode(group); err != nil {
-				return []*Group{}, err
+				return nil, err
 			}
 
 			groups = append(groups, group)
