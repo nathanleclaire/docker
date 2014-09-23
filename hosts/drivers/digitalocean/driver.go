@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
+	"time"
 
 	"code.google.com/p/goauth2/oauth"
 	"github.com/docker/docker/hosts/ssh"
@@ -119,6 +120,7 @@ func (d *Driver) Create() error {
 			break
 		}
 
+		time.Sleep(1 * time.Second)
 	}
 
 	log.Debugf("Created droplet ID %d, IP address %s",
