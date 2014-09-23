@@ -185,7 +185,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	return nil
+	return d.Start()
 }
 
 func (d *Driver) Start() error {
