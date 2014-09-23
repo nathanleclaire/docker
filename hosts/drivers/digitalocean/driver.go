@@ -168,11 +168,13 @@ func (d *Driver) GetState() (state.State, error) {
 }
 
 func (d *Driver) Start() error {
-	return nil
+	_, _, err := d.getClient().DropletActions.PowerOn(d.dropletID)
+	return err
 }
 
 func (d *Driver) Stop() error {
-	return nil
+	_, _, err := d.getClient().DropletActions.Shutdown(d.dropletID)
+	return err
 }
 
 func (d *Driver) Remove() error {
@@ -187,11 +189,13 @@ func (d *Driver) Remove() error {
 }
 
 func (d *Driver) Restart() error {
-	return nil
+	_, _, err := d.getClient().DropletActions.Reboot(d.dropletID)
+	return err
 }
 
 func (d *Driver) Kill() error {
-	return nil
+	_, _, err := d.getClient().DropletActions.PowerOff(d.dropletID)
+	return err
 }
 
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
