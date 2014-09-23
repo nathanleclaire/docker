@@ -22,14 +22,18 @@ func (daemon *Daemon) GroupsCreate(config *api.Group) error {
 		return fmt.Errorf("group name cannot be empty")
 	}
 
-	config.Created = time.Now()
-
 	if err := daemon.createGroup(config); err != nil {
-		return err
+		if !os.IsExist(err) {
+			return err
+		}
+
+		if err := daemon.updateGroup(config); err != nil {
+			return err
+		}
 	}
 
 	for _, c := range config.Containers {
-		if err := daemon.createGroupContainer(config.Name, c); err != nil {
+		if err := daemon.updateGroupContainer(config.Name, c); err != nil {
 			return err
 		}
 	}
@@ -95,6 +99,8 @@ func (daemon *Daemon) createGroup(config *api.Group) error {
 	}
 	defer f.Close()
 
+	config.Created = time.Now()
+
 	if err := json.NewEncoder(f).Encode(config); err != nil {
 		return err
 	}
@@ -104,6 +110,17 @@ func (daemon *Daemon) createGroup(config *api.Group) error {
 	}
 
 	return nil
+}
+
+func (daemon *Daemon) updateGroup(config *api.Group) error {
+	oldConfig, err := daemon.fetchGroupConfig(config.Name)
+	if err != nil {
+		return err
+	}
+
+	config.Created = oldConfig.Created
+
+	return daemon.updateGroupConfig(config)
 }
 
 func asRunConfig(c *api.Container) *runconfig.Config {
@@ -130,7 +147,15 @@ func asRunConfig(c *api.Container) *runconfig.Config {
 	return r
 }
 
-func (daemon *Daemon) createGroupContainer(groupName string, c *api.Container) error {
+func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) error {
+	fullName := filepath.Join("group-"+groupName, c.Name)
+
+	if container := daemon.Get(fullName); container != nil {
+		if err := daemon.Destroy(container); err != nil {
+			return err
+		}
+	}
+
 	// do not pass a container name here and let docker auto generate the default name
 	// we will set the name scoped to the group later
 	container, _, err := daemon.Create(asRunConfig(c), "")
@@ -152,7 +177,6 @@ func (daemon *Daemon) createGroupContainer(groupName string, c *api.Container) e
 		return err
 	}
 
-	fullName := filepath.Join("group-"+groupName, c.Name)
 	if _, err := daemon.containerGraph.Set(fullName, container.ID); err != nil {
 		return fmt.Errorf("%s %s: %s", fullName, container.ID, err)
 	}
@@ -163,12 +187,9 @@ func (daemon *Daemon) createGroupContainer(groupName string, c *api.Container) e
 }
 
 func (daemon *Daemon) fetchGroupConfig(name string) (*api.Group, error) {
-	var (
-		config    *api.Group
-		groupRoot = filepath.Join(daemon.Config().Root, "groups", name)
-	)
+	var config *api.Group
 
-	f, err := os.Open(filepath.Join(groupRoot, "config.json"))
+	f, err := os.Open(daemon.groupConfigPath(name))
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +200,19 @@ func (daemon *Daemon) fetchGroupConfig(name string) (*api.Group, error) {
 	}
 
 	return config, nil
+}
+
+func (daemon *Daemon) updateGroupConfig(config *api.Group) error {
+	f, err := os.OpenFile(daemon.groupConfigPath(config.Name), os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(config)
+}
+
+func (daemon *Daemon) groupConfigPath(name string) string {
+	return filepath.Join(daemon.Config().Root, "groups", name, "config.json")
 }
 
 func (daemon *Daemon) fetchGroupsContainers(name string) ([]*Container, error) {
