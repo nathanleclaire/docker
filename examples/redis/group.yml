@@ -3,6 +3,9 @@ name: redisstuff
 containers:
   redis-master:
     image: crosbymichael/redis:latest
+    user: root
+    volumes:
+        - /redis
     ports:
         - "6379:6379"
 

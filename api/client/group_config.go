@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/nat"
@@ -13,6 +14,8 @@ type GroupContainer struct {
 	Build   string
 	Command []string
 	Ports   []string
+	Volumes []string
+	User    string
 }
 
 type GroupConfig struct {
@@ -33,6 +36,7 @@ func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*api.Group, error) {
 	for containerName, c := range raw.Containers {
 		container := &api.Container{
 			Name: containerName,
+			User: c.User,
 		}
 
 		if c.Build != "" {
@@ -98,7 +102,28 @@ func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*api.Group, error) {
 			container.Ports = append(container.Ports, pp)
 		}
 
-		// TODO: volumes....
+		for _, rawVolume := range c.Volumes {
+			parts := strings.Split(rawVolume, ":")
+			switch len(parts) {
+			case 0:
+				return nil, fmt.Errorf("invalid volume format %s", rawVolume)
+			case 1:
+				container.Volumes = append(container.Volumes, &api.Volume{
+					Container: parts[0],
+				})
+			case 2:
+				container.Volumes = append(container.Volumes, &api.Volume{
+					Container: parts[1],
+					Host:      parts[0],
+				})
+			case 3:
+				container.Volumes = append(container.Volumes, &api.Volume{
+					Container: parts[1],
+					Host:      parts[0],
+					Mode:      strings.ToUpper(parts[2]),
+				})
+			}
+		}
 
 		group.Containers = append(group.Containers, container)
 	}

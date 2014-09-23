@@ -68,6 +68,7 @@ type Container struct {
 	Ports   []*Port
 	Links   []string
 	Command []string
+	User    string
 }
 
 type Group struct {

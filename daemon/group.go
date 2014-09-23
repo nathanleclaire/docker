@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -93,6 +94,10 @@ func (daemon *Daemon) createGroup(config *api.Group) error {
 		return err
 	}
 
+	if err := os.MkdirAll(filepath.Join(groupDir, "volumes"), 0644); err != nil {
+		return err
+	}
+
 	f, err := os.Create(filepath.Join(groupDir, "config.json"))
 	if err != nil {
 		return err
@@ -123,12 +128,13 @@ func (daemon *Daemon) updateGroup(config *api.Group) error {
 	return daemon.updateGroupConfig(config)
 }
 
-func asRunConfig(c *api.Container) *runconfig.Config {
+func asRunConfig(groupDir string, c *api.Container) (*runconfig.Config, error) {
 	r := &runconfig.Config{
 		Image:        c.Image,
 		Cmd:          c.Command,
 		ExposedPorts: make(map[nat.Port]struct{}),
 		Volumes:      make(map[string]struct{}),
+		User:         c.User,
 	}
 
 	for _, p := range c.Ports {
@@ -140,11 +146,14 @@ func asRunConfig(c *api.Container) *runconfig.Config {
 		r.ExposedPorts[nat.Port(fmt.Sprintf("%d/%s", p.Container, proto))] = struct{}{}
 	}
 
-	for _, v := range c.Volumes {
-		r.Volumes[v.Container] = struct{}{}
-	}
+	return r, nil
+}
 
-	return r
+func hashPath(p string) string {
+	h := md5.New()
+	fmt.Fprint(h, p)
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) error {
@@ -156,15 +165,22 @@ func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) e
 		}
 	}
 
+	groupDir := filepath.Join(daemon.Config().Root, "groups", groupName)
+
+	config, err := asRunConfig(groupDir, c)
+	if err != nil {
+		return err
+	}
+
 	// do not pass a container name here and let docker auto generate the default name
 	// we will set the name scoped to the group later
-	container, _, err := daemon.Create(asRunConfig(c), "")
+	container, _, err := daemon.Create(config, "")
 	if err != nil {
 		// TODO: atomic abort and cleanup??????
 		return err
 	}
 
-	if err := setHostConfig(c, container); err != nil {
+	if err := setHostConfig(groupDir, c, container); err != nil {
 		return err
 	}
 
@@ -234,12 +250,14 @@ func (daemon *Daemon) fetchGroupsContainers(name string) (map[string]*Container,
 	return containers, nil
 }
 
-func setHostConfig(c *api.Container, cc *Container) error {
+func setHostConfig(groupDir string, c *api.Container, cc *Container) error {
 	if cc.hostConfig.PortBindings == nil {
 		cc.hostConfig.PortBindings = nat.PortMap{}
 	}
 
-	// volumes and port bindings
+	cc.Volumes = make(map[string]string)
+	cc.VolumesRW = make(map[string]bool)
+
 	for p := range cc.Config.ExposedPorts {
 	ports:
 		for _, pp := range c.Ports {
@@ -250,6 +268,28 @@ func setHostConfig(c *api.Container, cc *Container) error {
 
 				break ports
 			}
+		}
+	}
+
+	// TODO: @crosbymichael this does not belong here
+	for _, v := range c.Volumes {
+		if v.Host == "" {
+			var (
+				hash = hashPath(v.Container)
+				path = filepath.Join(groupDir, "volumes", c.Name, hash)
+			)
+
+			if err := os.MkdirAll(path, 0644); err != nil {
+				return err
+			}
+
+			v.Host = path
+		}
+
+		cc.Volumes[v.Container] = v.Host
+
+		if v.Mode != "RO" {
+			cc.VolumesRW[v.Container] = true
 		}
 	}
 
@@ -314,7 +354,7 @@ func (daemon *Daemon) GroupsStart(name string) error {
 			return err
 		}
 
-		if err := setupMountsForContainer(c); err != nil {
+		if err := c.setupMounts(); err != nil {
 			return err
 		}
 	}
