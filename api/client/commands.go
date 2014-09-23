@@ -2601,11 +2601,8 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 
 	store := hosts.NewStore()
 
-	host, err := store.Create(name, *driver, options)
-	if err != nil {
-		return err
-	}
-	return host.Start()
+	_, err := store.Create(name, *driver, options)
+	return err
 }
 
 func (cli *DockerCli) CmdHostsStart(args ...string) error {
