@@ -215,20 +215,20 @@ func (daemon *Daemon) groupConfigPath(name string) string {
 	return filepath.Join(daemon.Config().Root, "groups", name, "config.json")
 }
 
-func (daemon *Daemon) fetchGroupsContainers(name string) ([]*Container, error) {
+func (daemon *Daemon) fetchGroupsContainers(name string) (map[string]*Container, error) {
 	config, err := daemon.fetchGroupConfig(name)
 	if err != nil {
 		return nil, err
 	}
 
-	containers := []*Container{}
+	containers := make(map[string]*Container)
 	for _, cconfig := range config.Containers {
 		c := daemon.Get(filepath.Join("group-"+config.Name, cconfig.Name))
 		if c == nil {
 			return nil, fmt.Errorf("container does not exist for group %s", cconfig.Name)
 		}
 
-		containers = append(containers, c)
+		containers[cconfig.Name] = c
 	}
 
 	return containers, nil
@@ -268,7 +268,7 @@ func (daemon *Daemon) GroupsStart(name string) error {
 		return err
 	}
 
-	for _, c := range containers {
+	for cname, c := range containers {
 		if err := c.setupContainerDns(); err != nil {
 			return err
 		}
@@ -282,7 +282,7 @@ func (daemon *Daemon) GroupsStart(name string) error {
 			return err
 		}
 
-		lines = append(lines, fmt.Sprintf("%s %s", network.IP, name))
+		lines = append(lines, fmt.Sprintf("%s %s", network.IP, cname))
 
 		c.NetworkSettings.Bridge = network.Bridge
 		c.NetworkSettings.IPAddress = network.IP
