@@ -2510,6 +2510,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 		{"list", "List hosts (default)"},
 		{"restart", "Restart a host"},
 		{"rm", "Remove a host"},
+		{"ssh", "Run SSH on a host"},
 		{"start", "Start a host"},
 		{"stop", "Stop a host"},
 	} {
@@ -2722,4 +2723,37 @@ func (cli *DockerCli) CmdHostsKill(args ...string) error {
 		return err
 	}
 	return host.Driver.Kill()
+}
+
+func (cli *DockerCli) CmdHostsSsh(args ...string) error {
+	cmd := cli.Subcmd("hosts ssh", "NAME", "Run SSH on a host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() < 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	i := 1
+	for i < len(os.Args) && os.Args[i-1] != cmd.Arg(0) {
+		i++
+	}
+
+	store := hosts.NewStore()
+
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+
+	sshCmd := host.Driver.GetSSHCommand(os.Args[i:]...)
+	sshCmd.Stdin = os.Stdin
+	sshCmd.Stdout = os.Stdout
+	sshCmd.Stderr = os.Stderr
+	if err := sshCmd.Run(); err != nil {
+		return fmt.Errorf("%s", err)
+	}
+	return nil
 }

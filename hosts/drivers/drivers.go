@@ -2,6 +2,7 @@ package drivers
 
 import (
 	"fmt"
+	"os/exec"
 
 	"github.com/docker/docker/hosts/drivers/socket"
 	"github.com/docker/docker/hosts/drivers/virtualbox"
@@ -23,6 +24,7 @@ type Driver interface {
 	Stop() error
 	Restart() error
 	Kill() error
+	GetSSHCommand(args ...string) *exec.Cmd
 	// Pause() error
 }
 
