@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -43,6 +44,18 @@ func GenerateSSHKey(path string) error {
 		if err := cmd.Run(); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func WaitForTCP(addr string) error {
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	if _, err = conn.Read(make([]byte, 1)); err != nil {
+		return err
 	}
 	return nil
 }

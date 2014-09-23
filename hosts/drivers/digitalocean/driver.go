@@ -127,6 +127,23 @@ func (d *Driver) Create() error {
 		newDroplet.Droplet.ID,
 		d.ipAddress)
 
+	log.Debugf("Waiting for SSH...")
+
+	if err := ssh.WaitForTCP(fmt.Sprintf("%s:%d", d.ipAddress, 22)); err != nil {
+		return err
+	}
+
+	log.Debugf("Updating /etc/default/docker to listen on all interfaces...")
+
+	cmd := d.GetSSHCommand("echo 'export DOCKER_OPTS=\"--host=tcp://0.0.0.0:2375\"' >> /etc/default/docker")
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	if err := d.GetSSHCommand("restart docker").Run(); err != nil {
+		return err
+	}
+
 	return nil
 }
 

@@ -193,8 +193,7 @@ func (d *Driver) Start() error {
 		return err
 	}
 	log.Infof("Waiting for host to start...")
-	addr := fmt.Sprintf("localhost:%d", d.sshPort)
-	return waitForTCP(addr)
+	return ssh.WaitForTCP(fmt.Sprintf("localhost:%d", d.sshPort))
 }
 
 func (d *Driver) Stop() error {
@@ -471,18 +470,6 @@ func zeroFill(w io.Writer, n int64) error {
 			return err
 		}
 		n -= int64(k)
-	}
-	return nil
-}
-
-func waitForTCP(addr string) error {
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	if _, err = conn.Read(make([]byte, 1)); err != nil {
-		return err
 	}
 	return nil
 }
