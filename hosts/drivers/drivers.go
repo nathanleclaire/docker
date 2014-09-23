@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/docker/docker/hosts/drivers/digitalocean"
 	"github.com/docker/docker/hosts/drivers/socket"
 	"github.com/docker/docker/hosts/drivers/virtualbox"
 	"github.com/docker/docker/hosts/state"
@@ -31,6 +32,8 @@ type Driver interface {
 // NewDriver creates a new driver of type "name"
 func NewDriver(name string, options map[string]string, storePath string) (Driver, error) {
 	switch name {
+	case "digitalocean":
+		return digitalocean.NewDriver(options, storePath)
 	case "socket":
 		return socket.NewDriver(options, storePath)
 	case "virtualbox":
