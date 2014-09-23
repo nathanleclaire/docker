@@ -1,6 +1,7 @@
 package hosts
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -18,6 +19,11 @@ func NewStore() *Store {
 
 func (s *Store) Create(name string, driverName string, driverOptions map[string]string) (*Host, error) {
 	hostPath := path.Join(s.Path, name)
+
+	if _, err := os.Stat(hostPath); err == nil {
+		return nil, fmt.Errorf("Host %q already exists", name)
+	}
+
 	host, err := NewHost(name, driverName, driverOptions, hostPath)
 	if err != nil {
 		return host, err
