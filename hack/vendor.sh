@@ -47,6 +47,8 @@ clone git github.com/gorilla/mux 136d54f81f
 
 clone git github.com/tchap/go-patricia v1.0.1
 
+clone git gopkg.in/yaml.v1 b6b591a3c0
+
 clone hg code.google.com/p/go.net 84a4013f96e0
 
 clone hg code.google.com/p/gosqlite 74691fb6f837
