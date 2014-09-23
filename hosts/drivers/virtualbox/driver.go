@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/pkg/log"
 	"github.com/docker/docker/utils"
@@ -80,7 +81,7 @@ func (d *Driver) Create() error {
 		}
 	}
 
-	if err := d.generateSSHKey(); err != nil {
+	if err := ssh.GenerateSSHKey(d.sshKeyPath()); err != nil {
 		return err
 	}
 
@@ -282,7 +283,7 @@ func (d *Driver) isISODownloaded() (bool, error) {
 }
 
 func (d *Driver) GetIP() (string, error) {
-	cmd := d.getSSHCommand("ip addr show dev eth1")
+	cmd := d.GetSSHCommand("ip addr show dev eth1")
 
 	b, err := cmd.Output()
 	if err != nil {
@@ -302,46 +303,16 @@ func (d *Driver) GetIP() (string, error) {
 	return "", fmt.Errorf("No IP address found %s", out)
 }
 
-func (d *Driver) getSSHCommand(args ...string) *exec.Cmd {
-
-	defaultSSHArgs := []string{
-		"-o", "IdentitiesOnly=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "LogLevel=quiet", // suppress "Warning: Permanently added '[localhost]:2022' (ECDSA) to the list of known hosts."
-		"-p", fmt.Sprintf("%d", d.sshPort),
-		"-i", d.sshKeyPath(),
-		"docker@localhost",
-	}
-
-	sshArgs := append(defaultSSHArgs, args...)
-	cmd := exec.Command("ssh", sshArgs...)
-	log.Debugf("executing: %v", strings.Join(cmd.Args, " "))
-
-	return cmd
-}
-
-func (d *Driver) generateSSHKey() error {
-	if _, err := os.Stat(d.sshKeyPath()); err != nil {
-		if !os.IsNotExist(err) {
-			return err
-		}
-
-		cmd := exec.Command("ssh-keygen", "-t", "rsa", "-N", "", "-f", d.sshKeyPath())
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		log.Debugf("executing: %v %v\n", cmd.Path, strings.Join(cmd.Args, " "))
-
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-	}
-	return nil
+func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
+	return ssh.GetSSHCommand("localhost", d.sshPort, "docker", d.sshKeyPath(), args...)
 }
 
 func (d *Driver) sshKeyPath() string {
 	return path.Join(d.storePath, "id_rsa")
+}
+
+func (d *Driver) publicSSHKeyPath() string {
+	return d.sshKeyPath() + ".pub"
 }
 
 func (d *Driver) diskPath() string {
@@ -417,7 +388,7 @@ func (d *Driver) generateDiskImage(size uint) error {
 	if err := tw.WriteHeader(file); err != nil {
 		return err
 	}
-	pubKey, err := ioutil.ReadFile(d.sshKeyPath() + ".pub")
+	pubKey, err := ioutil.ReadFile(d.publicSSHKeyPath())
 	if err != nil {
 		return err
 	}
