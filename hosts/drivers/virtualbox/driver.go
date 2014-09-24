@@ -337,6 +337,7 @@ func (d *Driver) diskPath() string {
 }
 
 // Get the latest boot2docker release tag name (e.g. "v0.6.0").
+// FIXME: find or create some other way to get the "latest release" of boot2docker since the GitHub API has a pretty low rate limit on API requests
 func getLatestReleaseName() (string, error) {
 	rsp, err := http.Get("https://api.github.com/repos/boot2docker/boot2docker/releases")
 	if err != nil {
