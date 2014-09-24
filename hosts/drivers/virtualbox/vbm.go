@@ -22,16 +22,16 @@ var (
 	ErrMachineExist    = errors.New("machine already exists")
 	ErrMachineNotExist = errors.New("machine does not exist")
 	ErrVBMNotFound     = errors.New("VBoxManage not found")
-	VBM                = "VBoxManage"
+	vboxManageCmd      = "VBoxManage"
 )
 
 func vbm(args ...string) error {
-	cmd := exec.Command(VBM, args...)
+	cmd := exec.Command(vboxManageCmd, args...)
 	if os.Getenv("DEBUG") != "" {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
-	log.Debugf("executing: %v %v", VBM, strings.Join(args, " "))
+	log.Debugf("executing: %v %v", vboxManageCmd, strings.Join(args, " "))
 	if err := cmd.Run(); err != nil {
 		if ee, ok := err.(*exec.Error); ok && ee == exec.ErrNotFound {
 			return ErrVBMNotFound
@@ -42,11 +42,11 @@ func vbm(args ...string) error {
 }
 
 func vbmOut(args ...string) (string, error) {
-	cmd := exec.Command(VBM, args...)
+	cmd := exec.Command(vboxManageCmd, args...)
 	if os.Getenv("DEBUG") != "" {
 		cmd.Stderr = os.Stderr
 	}
-	log.Debugf("executing: %v %v", VBM, strings.Join(args, " "))
+	log.Debugf("executing: %v %v", vboxManageCmd, strings.Join(args, " "))
 
 	b, err := cmd.Output()
 	if err != nil {
@@ -58,8 +58,8 @@ func vbmOut(args ...string) (string, error) {
 }
 
 func vbmOutErr(args ...string) (string, string, error) {
-	cmd := exec.Command(VBM, args...)
-	log.Debugf("executing: %v %v", VBM, strings.Join(args, " "))
+	cmd := exec.Command(vboxManageCmd, args...)
+	log.Debugf("executing: %v %v", vboxManageCmd, strings.Join(args, " "))
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
