@@ -81,3 +81,31 @@ func TestHostsEnsureHostConnects(t *testing.T) {
 
 	logDone("hosts - host connects to server")
 }
+
+func TestHostsEnsureHostIsRemoved(t *testing.T) {
+	createCmd := exec.Command(dockerBinary,
+		"hosts",
+		"create",
+		"-o", "url=tcp://10.11.12.13:2375",
+		"test")
+	out, _, err := runCommandWithOutput(createCmd)
+	errorOut(err, t, fmt.Sprintf("creating host failed with errors: %v", err))
+
+	out, _, err = runCommandWithOutput(exec.Command(dockerBinary, "hosts"))
+	errorOut(err, t, fmt.Sprintf("listing hosts failed with errors: %v", err))
+
+	if !strings.Contains(out, "test") {
+		t.Fatal("hosts should've listed 'test'")
+	}
+
+	out, _, err = runCommandWithOutput(exec.Command(dockerBinary,
+		"hosts", "rm", "test",
+	))
+	errorOut(err, t, fmt.Sprintf("creating host failed with errors: %v", err))
+
+	if strings.Contains(out, "test") {
+		t.Fatal("hosts should not list 'test'")
+	}
+
+	logDone("hosts - host is removed")
+}
