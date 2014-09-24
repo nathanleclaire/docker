@@ -23,6 +23,10 @@ type GroupContainer struct {
 	Memory    string
 	CpuShares int64  `yaml:"cpu_shares"`
 	Cpuset    string `yaml:"cpu_set"`
+
+	CapAdd  []string `yaml:"cap_add"`
+	CapDrop []string `yaml:"cap_drop"`
+	Devices []string
 }
 
 type GroupConfig struct {
@@ -47,6 +51,9 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 
 			CpuShares: c.CpuShares,
 			Cpuset:    c.Cpuset,
+
+			CapAdd:  c.CapAdd,
+			CapDrop: c.CapDrop,
 		}
 
 		if c.Memory != "" {
@@ -105,6 +112,33 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 					Host:      parts[0],
 					Mode:      strings.ToUpper(parts[2]),
 				})
+			}
+		}
+
+		for _, rawDevice := range c.Devices {
+			parts := strings.Split(rawDevice, ":")
+
+			switch len(parts) {
+			case 1:
+				container.Devices = append(container.Devices, &api.Device{
+					PathOnHost:        parts[0],
+					PathInContainer:   parts[0],
+					CgroupPermissions: "rwm",
+				})
+			case 2:
+				container.Devices = append(container.Devices, &api.Device{
+					PathOnHost:        parts[0],
+					PathInContainer:   parts[1],
+					CgroupPermissions: "rwm",
+				})
+			case 3:
+				container.Devices = append(container.Devices, &api.Device{
+					PathOnHost:        parts[0],
+					PathInContainer:   parts[1],
+					CgroupPermissions: parts[2],
+				})
+			default:
+				return nil, fmt.Errorf("invalid device format %s", rawDevice)
 			}
 		}
 

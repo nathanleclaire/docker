@@ -28,6 +28,7 @@ containers:
       - MKNOD
     devices:
       - /dev/sdc:/dev/xvdc:rwm
+
     entrypoint:
       - echo
     environment:
@@ -66,6 +67,7 @@ var jsonData = []byte(`{
           "CgroupPermissions": "rwm"
         }
       ],
+
       "Entrypoint": ["echo"],
       "Env": [
         "FOO=1"
@@ -129,6 +131,16 @@ var expected = &api.Group{
 			Memory:    1073741824,
 			CpuShares: 100,
 			Cpuset:    "0,1",
+
+			CapAdd:  []string{"NET_ADMIN"},
+			CapDrop: []string{"MKNOD"},
+			Devices: []*api.Device{
+				&api.Device{
+					PathOnHost:        "/dev/sdc",
+					PathInContainer:   "/dev/xvdc",
+					CgroupPermissions: "rwm",
+				},
+			},
 		},
 	},
 }

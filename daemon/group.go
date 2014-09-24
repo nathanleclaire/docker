@@ -300,6 +300,17 @@ func setHostConfig(groupDir string, c *api.Container, cc *Container) error {
 		}
 	}
 
+	cc.hostConfig.CapAdd = c.CapAdd
+	cc.hostConfig.CapDrop = c.CapDrop
+
+	for _, d := range c.Devices {
+		cc.hostConfig.Devices = append(cc.hostConfig.Devices, runconfig.DeviceMapping{
+			PathOnHost:        d.PathOnHost,
+			PathInContainer:   d.PathInContainer,
+			CgroupPermissions: d.CgroupPermissions,
+		})
+	}
+
 	return nil
 }
 

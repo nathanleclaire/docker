@@ -61,6 +61,12 @@ type Port struct {
 	Host      int
 }
 
+type Device struct {
+	PathOnHost        string
+	PathInContainer   string
+	CgroupPermissions string
+}
+
 type Container struct {
 	Name  string
 	Image string
@@ -75,6 +81,10 @@ type Container struct {
 	Memory    int64
 	CpuShares int64
 	Cpuset    string
+
+	CapAdd  []string
+	CapDrop []string
+	Devices []*Device
 }
 
 type Group struct {
