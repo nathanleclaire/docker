@@ -17,9 +17,11 @@ containers:
   everything:
     image: busybox
     command: ["hello world"]
+
     memory: 1g
-    cpus: 100
-    cpuset: 0,1
+    cpu_shares: 100
+    cpu_set: 0,1
+
     cap_add:
       - NET_ADMIN
     cap_drop:
@@ -50,9 +52,11 @@ var jsonData = []byte(`{
       "Name": "everything",
       "Image": "busybox",
       "Cmd": ["hello world"],
+
       "Memory": 1073741824,
       "CpuShares": 100,
       "Cpuset": "0,1",
+
       "CapAdd": ["NET_ADMIN"],
       "CapDrop": ["MKNOD"],
       "Devices": [
@@ -103,7 +107,6 @@ var expected = &api.Group{
 			Name:  "everything",
 			Image: "busybox",
 			Cmd:   []string{"hello world"},
-			User:  "root",
 
 			Ports: []*api.Port{
 				&api.Port{
@@ -120,6 +123,12 @@ var expected = &api.Group{
 					Mode:      "rw",
 				},
 			},
+
+			User: "root",
+
+			Memory:    1073741824,
+			CpuShares: 100,
+			Cpuset:    "0,1",
 		},
 	},
 }

@@ -6,5 +6,8 @@ containers:
     command: ["python", "app.py"]
     ports:
       - "5000:5000"
+    memory: 4m
+    cpu_shares: 100
+    cpu_set: "0"
   redis:
     image: redis:latest

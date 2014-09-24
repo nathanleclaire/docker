@@ -7,15 +7,22 @@ import (
 
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/nat"
+	"github.com/docker/docker/pkg/units"
 )
 
 type GroupContainer struct {
 	Image   string
 	Build   string
 	Command []string
+
 	Ports   []string
 	Volumes []string
-	User    string
+
+	User string
+
+	Memory    string
+	CpuShares int64  `yaml:"cpu_shares"`
+	Cpuset    string `yaml:"cpu_set"`
 }
 
 type GroupConfig struct {
@@ -35,7 +42,19 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 			Name:  containerName,
 			Image: c.Image,
 			Cmd:   c.Command,
-			User:  c.User,
+
+			User: c.User,
+
+			CpuShares: c.CpuShares,
+			Cpuset:    c.Cpuset,
+		}
+
+		if c.Memory != "" {
+			ram, err := units.RAMInBytes(c.Memory)
+			if err != nil {
+				return nil, err
+			}
+			container.Memory = ram
 		}
 
 		_, portBindings, err := nat.ParsePortSpecs(c.Ports)

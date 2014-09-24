@@ -62,13 +62,19 @@ type Port struct {
 }
 
 type Container struct {
-	Name    string
-	Image   string
-	Volumes []*Volume
+	Name  string
+	Image string
+	Cmd   []string
+
 	Ports   []*Port
+	Volumes []*Volume
 	Links   []string
-	Cmd     []string
-	User    string
+
+	User string
+
+	Memory    int64
+	CpuShares int64
+	Cpuset    string
 }
 
 type Group struct {
