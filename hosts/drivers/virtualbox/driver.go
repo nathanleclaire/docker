@@ -436,7 +436,8 @@ func (d *Driver) generateDiskImage(size uint) error {
 func createDiskImage(dest string, size uint, r io.Reader) error {
 	// Convert a raw image from stdin to the dest VMDK image.
 	sizeBytes := int64(size) << 20 // usually won't fit in 32-bit int (max 2GB)
-	cmd := exec.Command(VBM, "convertfromraw", "stdin", dest,
+	// FIXME: why isn't this just using the vbm*() functions?
+	cmd := exec.Command(vboxManageCmd, "convertfromraw", "stdin", dest,
 		fmt.Sprintf("%d", sizeBytes), "--format", "VMDK")
 
 	if os.Getenv("DEBUG") != "" {
