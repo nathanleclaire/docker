@@ -3,6 +3,7 @@ package virtualbox
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -36,7 +37,7 @@ func vbm(args ...string) error {
 		if ee, ok := err.(*exec.Error); ok && ee == exec.ErrNotFound {
 			return ErrVBMNotFound
 		}
-		return err
+		return fmt.Errorf("%v %v failed: %v", vboxManageCmd, strings.Join(args, " "), err)
 	}
 	return nil
 }
