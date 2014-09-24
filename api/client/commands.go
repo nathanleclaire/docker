@@ -2653,19 +2653,7 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 }
 
 func (cli *DockerCli) CmdHostsCreate(args ...string) error {
-	cmd := cli.Subcmd("hosts create DRIVER", "NAME", "Create hosts (available options vary based on DRIVER)")
-
-	// FIXME: we need at least one flag that's common to all the drivers so that the usage text has [OPTIONS] in it properly
-	cmd.Bool([]string{"-demo"}, false, "DEMO DEMO DEMO (FIXME)")
-
-	// "DRIVER" is not optional, and available flags are dependent on which driver is selected
-	if len(args) < 1 || args[0][0] == '-' {
-		cmd.Usage()
-	}
-	driver := args[0]
-	args = args[1:]
-
-	// FIXME: set up driver-specific flags here
+	cmd := cli.Subcmd("hosts create", "NAME", "Create hosts")
 
 	driverDesc := fmt.Sprintf(
 		"Driver to create host with. Available drivers: %s",
