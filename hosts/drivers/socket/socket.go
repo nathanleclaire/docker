@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/docker/docker/api"
 	"github.com/docker/docker/hosts/state"
 )
 
@@ -17,7 +18,11 @@ func NewDriver(options map[string]string, storePath string) (*Driver, error) {
 	if _, ok := options["url"]; !ok {
 		return nil, fmt.Errorf("The socket driver requires the option \"url\". Set it with -o url=...")
 	}
-	return &Driver{url: options["url"]}, nil
+	url, err := api.ValidateHostURL(options["url"])
+	if err != nil {
+		return nil, err
+	}
+	return &Driver{url: url}, nil
 }
 
 func (d *Driver) DriverName() string {
