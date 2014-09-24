@@ -2561,12 +2561,12 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 		} else {
 			state, err := host.Driver.GetState()
 			if err != nil {
-				return err
+				log.Errorf("error getting state for host %s: %s", host.Name, err)
 			}
 
 			url, err := host.Driver.GetURL()
 			if err != nil {
-				return err
+				log.Errorf("error getting URL for host %s: %s", host.Name, err)
 			}
 
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
