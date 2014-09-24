@@ -2585,6 +2585,8 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	cmd.Var(&flOption, []string{"o", "-option"}, "Set driver config option, in format key=value")
 	driver := cmd.String([]string{"d", "-driver"}, "socket", "Driver to create host with")
 
+	// FIXME: enumerate over available drivers and hand them our "cmd" object so they can add any long flags they might want/need (prefixed with DRIVERNAME of course, ie, --virtualbox-memory)
+
 	if err := cmd.Parse(args); err != nil {
 		return err
 	}
