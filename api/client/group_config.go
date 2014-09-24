@@ -23,58 +23,20 @@ type GroupConfig struct {
 	Containers map[string]*GroupContainer
 }
 
-// Transforms a client.GroupConfig into a runconfig.GroupConfig by:
-//
-//  - automatically building images
-//  - parsing port specs
-//
-func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*api.Group, error) {
+// Transforms a GroupConfig (read from YAML) into an api.Group (for posting as JSON)
+// Does not handle auto-build or auto-pull of images - see cli.transformGroupConfig
+func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 	group := &api.Group{
 		Name: raw.Name,
 	}
 
 	for containerName, c := range raw.Containers {
 		container := &api.Container{
-			Name: containerName,
-			User: c.User,
+			Name:  containerName,
+			Image: c.Image,
+			Cmd:   c.Command,
+			User:  c.User,
 		}
-
-		if c.Build != "" {
-			if c.Image != "" {
-				return nil, fmt.Errorf("%s specifies both 'build' and 'image'", containerName)
-			}
-
-			tag := fmt.Sprintf("%s-%s", group.Name, containerName)
-			imageExists, err := cli.checkImageExists(tag)
-			if err != nil {
-				return nil, err
-			}
-
-			if !imageExists {
-				if err := cli.build(c.Build, buildOptions{tag: tag}); err != nil {
-					return nil, err
-				}
-			}
-
-			container.Image = tag
-		} else {
-			tag := c.Image
-
-			imageExists, err := cli.checkImageExists(tag)
-			if err != nil {
-				return nil, err
-			}
-
-			if !imageExists {
-				if err := cli.pullImage(tag); err != nil {
-					return nil, err
-				}
-			}
-
-			container.Image = tag
-		}
-
-		container.Command = c.Command
 
 		_, portBindings, err := nat.ParsePortSpecs(c.Ports)
 		if err != nil {
@@ -110,11 +72,13 @@ func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*api.Group, error) {
 			case 1:
 				container.Volumes = append(container.Volumes, &api.Volume{
 					Container: parts[0],
+					Mode:      "rw",
 				})
 			case 2:
 				container.Volumes = append(container.Volumes, &api.Volume{
 					Container: parts[1],
 					Host:      parts[0],
+					Mode:      "rw",
 				})
 			case 3:
 				container.Volumes = append(container.Volumes, &api.Volume{
@@ -129,6 +93,63 @@ func (cli *DockerCli) processGroupConfig(raw *GroupConfig) (*api.Group, error) {
 	}
 
 	return group, nil
+}
+
+// Transforms a GroupConfig (read from YAML) into an api.Group (for posting as JSON)
+func (cli *DockerCli) transformGroupConfig(raw *GroupConfig) (*api.Group, error) {
+	group, err := preprocessGroupConfig(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, processedContainer := range group.Containers {
+		c := raw.Containers[processedContainer.Name]
+
+		tag, err := cli.resolveContainerConfigImageTag(group.Name, processedContainer.Name, c)
+		if err != nil {
+			return nil, err
+		}
+
+		processedContainer.Image = tag
+	}
+
+	return group, nil
+}
+
+func (cli *DockerCli) resolveContainerConfigImageTag(groupName string, containerName string, c *GroupContainer) (string, error) {
+	if c.Build != "" {
+		if c.Image != "" {
+			return "", fmt.Errorf("%s specifies both 'build' and 'image'", containerName)
+		}
+
+		tag := fmt.Sprintf("%s-%s", groupName, containerName)
+
+		imageExists, err := cli.checkImageExists(tag)
+		if err != nil {
+			return "", err
+		}
+
+		if !imageExists {
+			if err := cli.build(c.Build, buildOptions{tag: tag}); err != nil {
+				return "", err
+			}
+		}
+
+		return tag, nil
+	} else {
+		imageExists, err := cli.checkImageExists(c.Image)
+		if err != nil {
+			return "", err
+		}
+
+		if !imageExists {
+			if err := cli.pullImage(c.Image); err != nil {
+				return "", err
+			}
+		}
+
+		return c.Image, nil
+	}
 }
 
 func (cli *DockerCli) checkImageExists(image string) (bool, error) {

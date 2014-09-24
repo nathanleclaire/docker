@@ -131,7 +131,7 @@ func (daemon *Daemon) updateGroup(config *api.Group) error {
 func asRunConfig(groupDir string, c *api.Container) (*runconfig.Config, error) {
 	r := &runconfig.Config{
 		Image:        c.Image,
-		Cmd:          c.Command,
+		Cmd:          c.Cmd,
 		ExposedPorts: make(map[nat.Port]struct{}),
 		Volumes:      make(map[string]struct{}),
 		User:         c.User,

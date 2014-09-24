@@ -67,7 +67,7 @@ type Container struct {
 	Volumes []*Volume
 	Ports   []*Port
 	Links   []string
-	Command []string
+	Cmd     []string
 	User    string
 }
 

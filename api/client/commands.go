@@ -2612,7 +2612,7 @@ func (cli *DockerCli) CmdGroupsList(args ...string) error {
 						ports = append(ports, fmt.Sprintf("%d->%d", p.Container, p.Host))
 					}
 
-					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", c.Name, c.Image, strings.Join(c.Command, " "), strings.Join(ports, ","))
+					fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", c.Name, c.Image, strings.Join(c.Cmd, " "), strings.Join(ports, ","))
 				}
 			}
 		}
@@ -2735,7 +2735,7 @@ func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
 		return err
 	}
 
-	group, err := cli.processGroupConfig(raw)
+	group, err := cli.transformGroupConfig(raw)
 	if err != nil {
 		return err
 	}
