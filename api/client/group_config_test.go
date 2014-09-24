@@ -16,7 +16,11 @@ var yamlData = []byte(`name: everything
 containers:
   everything:
     image: busybox
+
     command: sleep infinity
+    entrypoint: ["echo"]
+    environment:
+      - FOO=1
 
     ports:
       - "8001:8000"
@@ -36,10 +40,6 @@ containers:
     devices:
       - /dev/sdc:/dev/xvdc:rwm
 
-    entrypoint:
-      - echo
-    environment:
-      - FOO=1
     hostname: foo.example.com
     net: host
     privileged: true
@@ -54,7 +54,12 @@ var jsonData = []byte(`{
     {
       "Name": "everything",
       "Image": "busybox",
+
       "Cmd": ["/bin/sh", "-c", "sleep infinity"],
+      "Entrypoint": ["echo"],
+      "Env": [
+        "FOO=1"
+      ],
 
       "Ports": [
         {
@@ -88,10 +93,6 @@ var jsonData = []byte(`{
         }
       ],
 
-      "Entrypoint": ["echo"],
-      "Env": [
-        "FOO=1"
-      ],
       "Hostname": "foo",
       "Domainname": "example.com",
       "NetworkMode": "host",
@@ -113,7 +114,12 @@ var expected = &api.Group{
 		&api.Container{
 			Name:  "everything",
 			Image: "busybox",
-			Cmd:   []string{"/bin/sh", "-c", "sleep infinity"},
+
+			Cmd:        []string{"/bin/sh", "-c", "sleep infinity"},
+			Entrypoint: []string{"echo"},
+			Env: []string{
+				"FOO=1",
+			},
 
 			Ports: []*api.Port{
 				&api.Port{

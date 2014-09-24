@@ -11,9 +11,12 @@ import (
 )
 
 type GroupContainer struct {
-	Image   string
-	Build   string
-	Command interface{}
+	Image string
+	Build string
+
+	Command     interface{}
+	Entrypoint  interface{}
+	Environment []string
 
 	Ports   []string
 	Volumes []string
@@ -55,16 +58,19 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 			CapDrop: c.CapDrop,
 		}
 
-		switch v := c.Command.(type) {
-		case []string:
-			container.Cmd = v
-		case string:
-			container.Cmd = []string{"/bin/sh", "-c", v}
-		case nil:
-			container.Cmd = []string{}
-		default:
-			return nil, fmt.Errorf("%s: command must be either a list or a string", containerName)
+		cmd, ok := parseCommand(c.Command)
+		if !ok {
+			return nil, fmt.Errorf("%s: command must be either a string or list of strings", containerName)
 		}
+		container.Cmd = cmd
+
+		entrypoint, ok := parseCommand(c.Entrypoint)
+		if !ok {
+			return nil, fmt.Errorf("%s: entrypoint must be either a string or list of strings", containerName)
+		}
+		container.Entrypoint = entrypoint
+
+		container.Env = c.Environment
 
 		if c.Memory != "" {
 			ram, err := units.RAMInBytes(c.Memory)
@@ -156,6 +162,33 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 	}
 
 	return group, nil
+}
+
+func parseCommand(cmd interface{}) ([]string, bool) {
+	switch v := cmd.(type) {
+	case string:
+		return []string{"/bin/sh", "-c", v}, true
+	case []interface{}:
+		return parseListOfStrings(v)
+	case nil:
+		return []string{}, true
+	default:
+		return []string{}, false
+	}
+}
+
+func parseListOfStrings(v []interface{}) ([]string, bool) {
+	list := []string{}
+
+	for _, i := range v {
+		str, ok := i.(string)
+		if !ok {
+			return []string{}, false
+		}
+		list = append(list, str)
+	}
+
+	return list, true
 }
 
 // Transforms a GroupConfig (read from YAML) into an api.Group (for posting as JSON)

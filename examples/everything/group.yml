@@ -13,6 +13,15 @@ containers:
     # test that device is mapped - should succeed
     # command: ["busybox", "ls", "/dev/myloop0"]
 
+    # test entrypoint
+    # entrypoint: ["echo"]
+    # command: ["this", "should", "be", "echoed"]
+
+    # test environment
+    # environment:
+    #   - FOO=1
+    # command: echo $FOO
+
     memory: 4m
     cpu_shares: 100
     cpu_set: "0"

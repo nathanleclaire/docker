@@ -70,7 +70,10 @@ type Device struct {
 type Container struct {
 	Name  string
 	Image string
-	Cmd   []string
+
+	Cmd        []string
+	Entrypoint []string
+	Env        []string
 
 	Ports   []*Port
 	Volumes []*Volume
