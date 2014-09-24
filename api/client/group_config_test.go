@@ -18,6 +18,13 @@ containers:
     image: busybox
     command: sleep infinity
 
+    ports:
+      - "8001:8000"
+    volumes:
+      - /data
+
+    user: root
+
     memory: 1g
     cpu_shares: 100
     cpu_set: 0,1
@@ -35,14 +42,9 @@ containers:
       - FOO=1
     hostname: foo.example.com
     net: host
-    ports:
-      - "8001:8000"
     privileged: true
     restart: on-failure:3
     tty: true
-    user: root
-    volumes:
-      - /data
     workdir: /workdir`)
 
 var jsonData = []byte(`{
@@ -53,6 +55,24 @@ var jsonData = []byte(`{
       "Name": "everything",
       "Image": "busybox",
       "Cmd": ["/bin/sh", "-c", "sleep infinity"],
+
+      "Ports": [
+        {
+          "Proto": "tcp",
+          "Container": 8000,
+          "Host": 8001
+        }
+      ],
+
+      "Volumes": [
+        {
+          "Container": "/data",
+          "Host": "",
+          "Mode": "rw"
+        }
+      ],
+
+      "User": "root",
 
       "Memory": 1073741824,
       "CpuShares": 100,
@@ -75,27 +95,12 @@ var jsonData = []byte(`{
       "Hostname": "foo",
       "Domainname": "example.com",
       "NetworkMode": "host",
-      "Ports": [
-        {
-          "Proto": "tcp",
-          "Container": 8000,
-          "Host": 8001
-        }
-      ],
       "Privileged": true,
       "RestartPolicy": {
         "Name": "on-failure",
         "MaximumRetryCount": 3
       },
       "Tty": true,
-      "User": "root",
-      "Volumes": [
-        {
-          "Container": "/data",
-          "Host": "",
-          "Mode": "rw"
-        }
-      ],
       "WorkingDir": "/workdir"
     }
   ]
