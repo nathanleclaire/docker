@@ -13,7 +13,7 @@ import (
 type GroupContainer struct {
 	Image   string
 	Build   string
-	Command []string
+	Command interface{}
 
 	Ports   []string
 	Volumes []string
@@ -45,7 +45,6 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 		container := &api.Container{
 			Name:  containerName,
 			Image: c.Image,
-			Cmd:   c.Command,
 
 			User: c.User,
 
@@ -54,6 +53,17 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 
 			CapAdd:  c.CapAdd,
 			CapDrop: c.CapDrop,
+		}
+
+		switch v := c.Command.(type) {
+		case []string:
+			container.Cmd = v
+		case string:
+			container.Cmd = []string{"/bin/sh", "-c", v}
+		case nil:
+			container.Cmd = []string{}
+		default:
+			return nil, fmt.Errorf("%s: command must be either a list or a string", containerName)
 		}
 
 		if c.Memory != "" {

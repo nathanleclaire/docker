@@ -16,7 +16,7 @@ var yamlData = []byte(`name: everything
 containers:
   everything:
     image: busybox
-    command: ["hello world"]
+    command: sleep infinity
 
     memory: 1g
     cpu_shares: 100
@@ -52,7 +52,7 @@ var jsonData = []byte(`{
     {
       "Name": "everything",
       "Image": "busybox",
-      "Cmd": ["hello world"],
+      "Cmd": ["/bin/sh", "-c", "sleep infinity"],
 
       "Memory": 1073741824,
       "CpuShares": 100,
@@ -108,7 +108,7 @@ var expected = &api.Group{
 		&api.Container{
 			Name:  "everything",
 			Image: "busybox",
-			Cmd:   []string{"hello world"},
+			Cmd:   []string{"/bin/sh", "-c", "sleep infinity"},
 
 			Ports: []*api.Port{
 				&api.Port{
