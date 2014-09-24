@@ -14,6 +14,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 
 type Driver struct {
 	machineName string
-	sshPort     uint
+	sshPort     int
 	memory      uint // main memory (in MB)
 	diskSize    uint // in GB
 	storePath   string
@@ -33,7 +34,9 @@ type Driver struct {
 
 func NewDriver(options map[string]string, storePath string) (*Driver, error) {
 	driver := &Driver{storePath: storePath}
-	driver.LoadOptions(options)
+	if err := driver.LoadOptions(options); err != nil {
+		return driver, err
+	}
 	return driver, nil
 }
 
@@ -42,17 +45,32 @@ func (d *Driver) DriverName() string {
 }
 
 func (d *Driver) GetOptions() map[string]string {
-	return map[string]string{"machineName": d.machineName}
+	return map[string]string{
+		"machineName": d.machineName,
+		"sshPort":     fmt.Sprintf("%d", d.sshPort),
+	}
 }
 
-func (d *Driver) LoadOptions(options map[string]string) {
+func (d *Driver) LoadOptions(options map[string]string) error {
+	var err error
+
 	d.machineName = options["machineName"]
+	if _, ok := options["sshPort"]; ok {
+		if d.sshPort, err = strconv.Atoi(options["sshPort"]); err != nil {
+			return err
+		}
+	} else {
+		if d.sshPort, err = getAvailableTCPPort(); err != nil {
+			return err
+		}
+	}
 	// d.memory = options["memory"]
 	// if d.memory == nil {
 	d.memory = 1024
 	// }
-	d.sshPort = 2223
 	d.diskSize = 20000
+
+	return nil
 }
 
 func (d *Driver) GetURL() (string, error) {
@@ -472,4 +490,18 @@ func zeroFill(w io.Writer, n int64) error {
 		n -= int64(k)
 	}
 	return nil
+}
+
+func getAvailableTCPPort() (int, error) {
+	// FIXME: this has a race condition between finding an available port and
+	// virtualbox using that port. Perhaps we should randomly pick an unused
+	// port in a range not used by kernel for assigning ports
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer ln.Close()
+	addr := ln.Addr().String()
+	addrParts := strings.SplitN(addr, ":", 2)
+	return strconv.Atoi(addrParts[1])
 }
