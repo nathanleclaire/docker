@@ -10,7 +10,7 @@ import (
 	"github.com/docker/docker/pkg/log"
 )
 
-func GetSSHCommand(host string, port uint, user string, sshKey string, args ...string) *exec.Cmd {
+func GetSSHCommand(host string, port int, user string, sshKey string, args ...string) *exec.Cmd {
 
 	defaultSSHArgs := []string{
 		"-o", "IdentitiesOnly=yes",
