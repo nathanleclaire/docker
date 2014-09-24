@@ -44,7 +44,7 @@ func (s *Store) Remove(name string) error {
 
 func (s *Store) List() ([]Host, error) {
 	dir, err := ioutil.ReadDir(s.Path)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	var hosts []Host
