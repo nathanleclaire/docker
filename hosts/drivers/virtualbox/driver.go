@@ -135,15 +135,12 @@ func (d *Driver) Create() error {
 		"--rtcuseutc", "on",
 		"--cpuhotplug", "off",
 		"--pae", "on",
-		"--longmode", "on",
 		"--synthcpu", "off",
 		"--hpet", "on",
 		"--hwvirtex", "on",
-		"--triplefaultreset", "off",
 		"--nestedpaging", "on",
 		"--largepages", "on",
 		"--vtxvpid", "on",
-		"--vtxux", "off",
 		"--accelerate3d", "off",
 		"--boot1", "dvd"); err != nil {
 		return err
