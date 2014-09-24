@@ -94,7 +94,7 @@ func (d *Driver) Create() error {
 			return err
 		}
 		log.Infof("Downloading boot2docker %s...", tag)
-		if err := downloadISO(path.Join(d.storePath, "boot2docker.iso"), tag); err != nil {
+		if err := downloadISO(d.storePath, "boot2docker.iso", tag); err != nil {
 			return err
 		}
 	}
@@ -358,7 +358,7 @@ func getLatestReleaseName() (string, error) {
 }
 
 // Download boot2docker ISO image for the given tag and save it at dest.
-func downloadISO(dest, tag string) error {
+func downloadISO(dir, file, tag string) error {
 	rsp, err := http.Get(fmt.Sprintf("https://github.com/boot2docker/boot2docker/releases/download/%s/boot2docker.iso", tag))
 	if err != nil {
 		return err
@@ -366,7 +366,7 @@ func downloadISO(dest, tag string) error {
 	defer rsp.Body.Close()
 
 	// Download to a temp file first then rename it to avoid partial download.
-	f, err := ioutil.TempFile("", "boot2docker-")
+	f, err := ioutil.TempFile(dir, file+".tmp")
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func downloadISO(dest, tag string) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(f.Name(), dest); err != nil {
+	if err := os.Rename(f.Name(), path.Join(dir, file)); err != nil {
 		return err
 	}
 	return nil
