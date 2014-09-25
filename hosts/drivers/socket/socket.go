@@ -42,7 +42,7 @@ func (d *Driver) GetIP() (string, error) {
 }
 
 func (d *Driver) GetState() (state.State, error) {
-	return state.Unknown, nil
+	return state.None, nil
 }
 
 func (d *Driver) Create() error {
