@@ -27,6 +27,7 @@ import (
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/hosts"
+	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/log"
@@ -2582,11 +2583,9 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	cmd := cli.Subcmd("hosts create", "NAME", "Create hosts")
 
-	flOption := opts.NewListOpts(opts.ValidateOption)
-	cmd.Var(&flOption, []string{"o", "-option"}, "Set driver config option, in format key=value")
 	driver := cmd.String([]string{"d", "-driver"}, "socket", "Driver to create host with")
 
-	// FIXME: enumerate over available drivers and hand them our "cmd" object so they can add any long flags they might want/need (prefixed with DRIVERNAME of course, ie, --virtualbox-memory)
+	createFlags := drivers.RegisterCreateFlags(cmd)
 
 	if err := cmd.Parse(args); err != nil {
 		return err
@@ -2597,15 +2596,11 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	}
 
 	name := cmd.Arg(0)
-	options := make(map[string]string)
-	for _, s := range flOption.GetAll() {
-		bits := strings.SplitN(s, "=", 2)
-		options[bits[0]] = bits[1]
-	}
 
 	store := hosts.NewStore()
 
-	_, err := store.Create(name, *driver, options)
+	driverCreateFlags, _ := createFlags[*driver]
+	_, err := store.Create(name, *driver, driverCreateFlags)
 	return err
 }
 

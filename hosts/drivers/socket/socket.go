@@ -6,35 +6,51 @@ import (
 
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/hosts/state"
+	flag "github.com/docker/docker/pkg/mflag"
 )
 
 // Driver is a socket host driver. It is used to connect to existing Docker
 // hosts by specifying the URL of the host as an option.
 type Driver struct {
-	url string
+	URL       string
+	storePath string
 }
 
-func NewDriver(options map[string]string, storePath string) (*Driver, error) {
-	if _, ok := options["url"]; !ok {
-		return nil, fmt.Errorf("The socket driver requires the option \"url\". Set it with -o url=...")
-	}
-	url, err := api.ValidateHostURL(options["url"])
-	if err != nil {
-		return nil, err
-	}
-	return &Driver{url: url}, nil
+type CreateFlags struct {
+	URL *string
+}
+
+// RegisterCreateFlags registers the flags this driver adds to
+// "docker hosts create"
+func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
+	createFlags := new(CreateFlags)
+	createFlags.URL = cmd.String([]string{"-socket-url"}, "", "Socket driver: URL of host")
+	return createFlags
+}
+
+func NewDriver(storePath string) (*Driver, error) {
+	return &Driver{storePath: storePath}, nil
 }
 
 func (d *Driver) DriverName() string {
 	return "socket"
 }
 
-func (d *Driver) GetOptions() map[string]string {
-	return map[string]string{"url": d.url}
+func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
+	flags := flagsInterface.(*CreateFlags)
+	if *flags.URL == "" {
+		return fmt.Errorf("--socket-url option is required for socket driver")
+	}
+	url, err := api.ValidateHostURL(*flags.URL)
+	if err != nil {
+		return err
+	}
+	d.URL = url
+	return nil
 }
 
 func (d *Driver) GetURL() (string, error) {
-	return d.url, nil
+	return d.URL, nil
 }
 
 func (d *Driver) GetIP() (string, error) {

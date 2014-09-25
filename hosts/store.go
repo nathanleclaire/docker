@@ -17,16 +17,21 @@ func NewStore() *Store {
 	return &Store{Path: rootPath}
 }
 
-func (s *Store) Create(name string, driverName string, driverOptions map[string]string) (*Host, error) {
+func (s *Store) Create(name string, driverName string, createFlags interface{}) (*Host, error) {
 	hostPath := path.Join(s.Path, name)
 
 	if _, err := os.Stat(hostPath); err == nil {
 		return nil, fmt.Errorf("Host %q already exists", name)
 	}
 
-	host, err := NewHost(name, driverName, driverOptions, hostPath)
+	host, err := NewHost(name, driverName, hostPath)
 	if err != nil {
 		return host, err
+	}
+	if createFlags != nil {
+		if err := host.Driver.SetConfigFromFlags(createFlags); err != nil {
+			return host, err
+		}
 	}
 	if err := host.Create(); err != nil {
 		return host, err
