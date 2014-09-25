@@ -94,6 +94,8 @@ func (d *Driver) Create() error {
 		}
 	}
 
+	log.Infof("Creating SSH key...")
+
 	if err := ssh.GenerateSSHKey(d.sshKeyPath()); err != nil {
 		return err
 	}
@@ -101,6 +103,8 @@ func (d *Driver) Create() error {
 	if err := d.generateDiskImage(d.DiskSize); err != nil {
 		return err
 	}
+
+	log.Infof("Creating Virtualbox VM...")
 
 	if err := vbm("createvm",
 		"--name", d.MachineName,
@@ -194,6 +198,8 @@ func (d *Driver) Create() error {
 		"--medium", d.diskPath()); err != nil {
 		return err
 	}
+
+	log.Infof("Starting Virtualbox VM...")
 
 	return d.Start()
 }

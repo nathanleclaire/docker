@@ -2600,8 +2600,15 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	store := hosts.NewStore()
 
 	driverCreateFlags, _ := createFlags[*driver]
-	_, err := store.Create(name, *driver, driverCreateFlags)
-	return err
+	host, err := store.Create(name, *driver, driverCreateFlags)
+	if err != nil {
+		return err
+	}
+	if err := store.SetActive(host); err != nil {
+		return err
+	}
+	log.Infof("%q has been created and is now the active host. Docker commands you run will now run against that host.", name)
+	return nil
 }
 
 func (cli *DockerCli) CmdHostsStart(args ...string) error {
