@@ -2664,7 +2664,7 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 
 	createFlags := drivers.RegisterCreateFlags(cmd)
 
-	// FIXME: enumerate over available drivers and hand them our "cmd" object so they can add any long flags they might want/need (prefixed with DRIVERNAME of course, ie, --virtualbox-memory)
+	createFlags := drivers.RegisterCreateFlags(cmd)
 
 	if err := cmd.Parse(args); err != nil {
 		return err
@@ -2675,11 +2675,6 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	}
 
 	name := cmd.Arg(0)
-	options := make(map[string]string)
-	for _, s := range flOption.GetAll() {
-		bits := strings.SplitN(s, "=", 2)
-		options[bits[0]] = bits[1]
-	}
 
 	store := hosts.NewStore()
 

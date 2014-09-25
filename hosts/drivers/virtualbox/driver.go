@@ -21,56 +21,38 @@ import (
 	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/pkg/log"
+	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/utils"
 )
 
 type Driver struct {
-	machineName string
-	sshPort     int
-	memory      uint // main memory (in MB)
-	diskSize    uint // in GB
+	MachineName string
+	SSHPort     int
+	Memory      int
+	DiskSize    int
 	storePath   string
 }
 
-func NewDriver(options map[string]string, storePath string) (*Driver, error) {
-	driver := &Driver{storePath: storePath}
-	if err := driver.LoadOptions(options); err != nil {
-		return driver, err
-	}
-	return driver, nil
+type CreateFlags struct {
+	Memory   *int
+	DiskSize *int
+}
+
+// RegisterCreateFlags registers the flags this driver adds to
+// "docker hosts create"
+func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
+	createFlags := new(CreateFlags)
+	createFlags.Memory = cmd.Int([]string{"-virtualbox-memory"}, 1024, "Size of memory for host in MB")
+	createFlags.DiskSize = cmd.Int([]string{"-virtualbox-disk-size"}, 20000, "Size of disk for host in MB")
+	return createFlags
+}
+
+func NewDriver(storePath string) (*Driver, error) {
+	return &Driver{storePath: storePath}, nil
 }
 
 func (d *Driver) DriverName() string {
 	return "virtualbox"
-}
-
-func (d *Driver) GetOptions() map[string]string {
-	return map[string]string{
-		"machineName": d.machineName,
-		"sshPort":     fmt.Sprintf("%d", d.sshPort),
-	}
-}
-
-func (d *Driver) LoadOptions(options map[string]string) error {
-	var err error
-
-	d.machineName = options["machineName"]
-	if _, ok := options["sshPort"]; ok {
-		if d.sshPort, err = strconv.Atoi(options["sshPort"]); err != nil {
-			return err
-		}
-	} else {
-		if d.sshPort, err = getAvailableTCPPort(); err != nil {
-			return err
-		}
-	}
-	// d.memory = options["memory"]
-	// if d.memory == nil {
-	d.memory = 1024
-	// }
-	d.diskSize = 20000
-
-	return nil
 }
 
 func (d *Driver) GetURL() (string, error) {
@@ -81,7 +63,20 @@ func (d *Driver) GetURL() (string, error) {
 	return fmt.Sprintf("tcp://%s:2375", ip), nil
 }
 
+func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
+	flags := flagsInterface.(*CreateFlags)
+	d.Memory = *flags.Memory
+	d.DiskSize = *flags.DiskSize
+	return nil
+}
+
 func (d *Driver) Create() error {
+	var err error
+
+	d.SSHPort, err = getAvailableTCPPort()
+	if err != nil {
+		return err
+	}
 	d.setMachineNameIfNotSet()
 
 	isISODownloaded, err := d.isISODownloaded()
@@ -103,12 +98,12 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	if err := d.generateDiskImage(d.diskSize); err != nil {
+	if err := d.generateDiskImage(d.DiskSize); err != nil {
 		return err
 	}
 
 	if err := vbm("createvm",
-		"--name", d.machineName,
+		"--name", d.MachineName,
 		"--register"); err != nil {
 		return err
 	}
@@ -118,7 +113,7 @@ func (d *Driver) Create() error {
 		cpus = 32
 	}
 
-	if err := vbm("modifyvm", d.machineName,
+	if err := vbm("modifyvm", d.MachineName,
 		"--firmware", "bios",
 		"--bioslogofadein", "off",
 		"--bioslogofadeout", "off",
@@ -128,7 +123,7 @@ func (d *Driver) Create() error {
 
 		"--ostype", "Linux26_64",
 		"--cpus", fmt.Sprintf("%d", cpus),
-		"--memory", fmt.Sprintf("%d", d.memory),
+		"--memory", fmt.Sprintf("%d", d.Memory),
 
 		"--acpi", "on",
 		"--ioapic", "on",
@@ -146,15 +141,15 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	if err := vbm("modifyvm", d.machineName,
+	if err := vbm("modifyvm", d.MachineName,
 		"--nic1", "nat",
 		"--nictype1", "virtio",
 		"--cableconnected1", "on"); err != nil {
 		return err
 	}
 
-	if err := vbm("modifyvm", d.machineName,
-		"--natpf1", fmt.Sprintf("ssh,tcp,127.0.0.1,%d,,22", d.sshPort)); err != nil {
+	if err := vbm("modifyvm", d.MachineName,
+		"--natpf1", fmt.Sprintf("ssh,tcp,127.0.0.1,%d,,22", d.SSHPort)); err != nil {
 		return err
 	}
 
@@ -167,7 +162,7 @@ func (d *Driver) Create() error {
 	if err != nil {
 		return err
 	}
-	if err := vbm("modifyvm", d.machineName,
+	if err := vbm("modifyvm", d.MachineName,
 		"--nic2", "hostonly",
 		"--nictype2", "virtio",
 		"--hostonlyadapter2", hostOnlyNetwork.Name,
@@ -175,14 +170,14 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	if err := vbm("storagectl", d.machineName,
+	if err := vbm("storagectl", d.MachineName,
 		"--name", "SATA",
 		"--add", "sata",
 		"--hostiocache", "on"); err != nil {
 		return err
 	}
 
-	if err := vbm("storageattach", d.machineName,
+	if err := vbm("storageattach", d.MachineName,
 		"--storagectl", "SATA",
 		"--port", "0",
 		"--device", "0",
@@ -191,7 +186,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	if err := vbm("storageattach", d.machineName,
+	if err := vbm("storageattach", d.MachineName,
 		"--storagectl", "SATA",
 		"--port", "1",
 		"--device", "0",
@@ -204,15 +199,15 @@ func (d *Driver) Create() error {
 }
 
 func (d *Driver) Start() error {
-	if err := vbm("startvm", d.machineName, "--type", "headless"); err != nil {
+	if err := vbm("startvm", d.MachineName, "--type", "headless"); err != nil {
 		return err
 	}
 	log.Infof("Waiting for host to start...")
-	return ssh.WaitForTCP(fmt.Sprintf("localhost:%d", d.sshPort))
+	return ssh.WaitForTCP(fmt.Sprintf("localhost:%d", d.SSHPort))
 }
 
 func (d *Driver) Stop() error {
-	if err := vbm("controlvm", d.machineName, "acpipowerbutton"); err != nil {
+	if err := vbm("controlvm", d.MachineName, "acpipowerbutton"); err != nil {
 		return err
 	}
 	for {
@@ -239,7 +234,7 @@ func (d *Driver) Remove() error {
 			return err
 		}
 	}
-	return vbm("unregistervm", "--delete", d.machineName)
+	return vbm("unregistervm", "--delete", d.MachineName)
 }
 
 func (d *Driver) Restart() error {
@@ -250,11 +245,11 @@ func (d *Driver) Restart() error {
 }
 
 func (d *Driver) Kill() error {
-	return vbm("controlvm", d.machineName, "poweroff")
+	return vbm("controlvm", d.MachineName, "poweroff")
 }
 
 func (d *Driver) GetState() (state.State, error) {
-	stdout, stderr, err := vbmOutErr("showvminfo", d.machineName,
+	stdout, stderr, err := vbmOutErr("showvminfo", d.MachineName,
 		"--machinereadable")
 	if err != nil {
 		if reMachineNotFound.FindString(stderr) != "" {
@@ -281,8 +276,8 @@ func (d *Driver) GetState() (state.State, error) {
 }
 
 func (d *Driver) setMachineNameIfNotSet() {
-	if d.machineName == "" {
-		d.machineName = fmt.Sprintf("docker-host-%s", utils.GenerateRandomID())
+	if d.MachineName == "" {
+		d.MachineName = fmt.Sprintf("docker-host-%s", utils.GenerateRandomID())
 	}
 }
 
@@ -318,7 +313,7 @@ func (d *Driver) GetIP() (string, error) {
 }
 
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return ssh.GetSSHCommand("localhost", d.sshPort, "docker", d.sshKeyPath(), args...)
+	return ssh.GetSSHCommand("localhost", d.SSHPort, "docker", d.sshKeyPath(), args...)
 }
 
 func (d *Driver) sshKeyPath() string {
@@ -382,7 +377,7 @@ func downloadISO(dir, file, tag string) error {
 }
 
 // Make a boot2docker VM disk image.
-func (d *Driver) generateDiskImage(size uint) error {
+func (d *Driver) generateDiskImage(size int) error {
 	log.Debugf("Creating %d MB hard disk image...", size)
 
 	magicString := "boot2docker, please format-me"
@@ -430,7 +425,7 @@ func (d *Driver) generateDiskImage(size uint) error {
 
 // createDiskImage makes a disk image at dest with the given size in MB. If r is
 // not nil, it will be read as a raw disk image to convert from.
-func createDiskImage(dest string, size uint, r io.Reader) error {
+func createDiskImage(dest string, size int, r io.Reader) error {
 	// Convert a raw image from stdin to the dest VMDK image.
 	sizeBytes := int64(size) << 20 // usually won't fit in 32-bit int (max 2GB)
 	// FIXME: why isn't this just using the vbm*() functions?

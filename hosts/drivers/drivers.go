@@ -80,3 +80,14 @@ func GetDriverNames() []string {
 	sort.Strings(names)
 	return names
 }
+
+// RegisterCreateFlags registers the flags for all of the drivers but ignores
+// the value of the flags. A second pass is done to gather the value of the
+// flags once we know what driver has been picked
+func RegisterCreateFlags(cmd *flag.FlagSet) map[string]interface{} {
+	return map[string]interface{}{
+		"digitalocean": digitalocean.RegisterCreateFlags(cmd),
+		"socket":       socket.RegisterCreateFlags(cmd),
+		"virtualbox":   virtualbox.RegisterCreateFlags(cmd),
+	}
+}
