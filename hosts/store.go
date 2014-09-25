@@ -89,7 +89,7 @@ func (s *Store) SetActive(host *Host) error {
 	if err := os.MkdirAll(path.Dir(s.activePath()), 0700); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(s.activePath(), []byte(host.Name), 0700)
+	return ioutil.WriteFile(s.activePath(), []byte(host.Name), 0600)
 }
 
 // activePath returns the path to the file that stores the name of the
