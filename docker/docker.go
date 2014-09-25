@@ -39,8 +39,23 @@ func main() {
 		os.Setenv("DEBUG", "1")
 	}
 
+	store := hosts.NewStore()
+
 	if len(flHosts) == 0 {
 		defaultHost := os.Getenv("DOCKER_HOST")
+		// If the client, attempt to get active host
+		if defaultHost == "" && !*flDaemon {
+			host, err := store.GetActive()
+			if err != nil {
+				log.Fatal(err)
+			}
+			if host != nil {
+				defaultHost, err = host.Driver.GetURL()
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+		}
 		if defaultHost == "" || *flDaemon {
 			// If we do not have a host, default to unix socket
 			defaultHost = fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET)
@@ -65,7 +80,6 @@ func main() {
 
 	// Attempt to find a host if it's a valid name
 	if _, err := hosts.ValidateHostName(hostURL); err == nil {
-		store := hosts.NewStore()
 		exists, err := store.Exists(hostURL)
 		if err != nil {
 			log.Fatal(err)

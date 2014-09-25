@@ -74,3 +74,26 @@ func (s *Store) Load(name string) (*Host, error) {
 	hostPath := path.Join(s.Path, name)
 	return LoadHost(name, hostPath)
 }
+
+func (s *Store) GetActive() (*Host, error) {
+	hostName, err := ioutil.ReadFile(s.activePath())
+	if os.IsNotExist(err) {
+		return nil, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return s.Load(string(hostName))
+}
+
+func (s *Store) SetActive(host *Host) error {
+	if err := os.MkdirAll(path.Dir(s.activePath()), 0700); err != nil {
+		return err
+	}
+	return ioutil.WriteFile(s.activePath(), []byte(host.Name), 0700)
+}
+
+// activePath returns the path to the file that stores the name of the
+// active host
+func (s *Store) activePath() string {
+	return path.Join(s.Path, ".active")
+}

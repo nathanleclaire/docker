@@ -119,3 +119,37 @@ func TestStoreLoad(t *testing.T) {
 		t.Fatal("Host name is incorrect")
 	}
 }
+
+func TestStoreGetSetActive(t *testing.T) {
+	if err := clearHosts(); err != nil {
+		t.Fatal(err)
+	}
+
+	store := NewStore()
+	originalHost, err := store.Create("test", "socket", map[string]string{
+		"url": "unix:///var/run/docker.sock",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	host, err := store.GetActive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host != nil {
+		t.Fatalf("Active host should not exist, got %s", host.Name)
+	}
+
+	if err := store.SetActive(originalHost); err != nil {
+		t.Fatal(err)
+	}
+
+	host, err = store.GetActive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Name != "test" {
+		t.Fatalf("Active host is not 'test', got %s", host.Name)
+	}
+}
