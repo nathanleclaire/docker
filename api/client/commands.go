@@ -2766,6 +2766,10 @@ func (cli *DockerCli) CmdUp(args ...string) error {
 		return err
 	}
 
+	if _, _, err := cli.call("POST", fmt.Sprintf("/groups/%s/start", group.Name), nil, true); err != nil {
+		return err
+	}
+
 	return nil
 
 }
