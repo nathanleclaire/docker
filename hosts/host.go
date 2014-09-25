@@ -36,6 +36,10 @@ func NewHost(name, driverName string, driverOptions map[string]string, storePath
 }
 
 func LoadHost(name string, storePath string) (*Host, error) {
+	if _, err := os.Stat(storePath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("Host %q does not exist", name)
+	}
+
 	host := &Host{Name: name, storePath: storePath}
 	if err := host.LoadConfig(); err != nil {
 		return nil, err
