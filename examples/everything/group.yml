@@ -12,6 +12,10 @@ containers:
     # command: sleep 300
 
     # test that NET_ADMIN is enabled - should succeed
+    # privileged: true
+    # command: ip link set lo down
+
+    # test that NET_ADMIN is enabled - should succeed
     # cap_add:
     #   - NET_ADMIN
     # command: ["/bin/sh", "-c", "ip link set lo down"]

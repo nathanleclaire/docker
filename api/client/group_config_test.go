@@ -35,6 +35,7 @@ containers:
     cpu_shares: 100
     cpu_set: 0,1
 
+    privileged: true
     cap_add:
       - NET_ADMIN
     cap_drop:
@@ -42,7 +43,6 @@ containers:
     devices:
       - /dev/sdc:/dev/xvdc:rwm
 
-    privileged: true
     restart: on-failure:3
 `)
 
@@ -84,6 +84,7 @@ var jsonData = []byte(`{
       "CpuShares": 100,
       "Cpuset": "0,1",
 
+      "Privileged": true,
       "CapAdd": ["NET_ADMIN"],
       "CapDrop": ["MKNOD"],
       "Devices": [
@@ -94,7 +95,6 @@ var jsonData = []byte(`{
         }
       ],
 
-      "Privileged": true,
       "RestartPolicy": {
         "Name": "on-failure",
         "MaximumRetryCount": 3
@@ -141,8 +141,9 @@ var expected = &api.Group{
 			CpuShares: 100,
 			Cpuset:    "0,1",
 
-			CapAdd:  []string{"NET_ADMIN"},
-			CapDrop: []string{"MKNOD"},
+			Privileged: true,
+			CapAdd:     []string{"NET_ADMIN"},
+			CapDrop:    []string{"MKNOD"},
 			Devices: []*api.Device{
 				&api.Device{
 					PathOnHost:        "/dev/sdc",

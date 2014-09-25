@@ -305,6 +305,7 @@ func setHostConfig(groupDir string, c *api.Container, cc *Container) error {
 		}
 	}
 
+	cc.hostConfig.Privileged = c.Privileged
 	cc.hostConfig.CapAdd = c.CapAdd
 	cc.hostConfig.CapDrop = c.CapDrop
 

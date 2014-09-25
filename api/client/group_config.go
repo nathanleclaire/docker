@@ -29,9 +29,10 @@ type GroupContainer struct {
 	CpuShares int64  `yaml:"cpu_shares"`
 	Cpuset    string `yaml:"cpu_set"`
 
-	CapAdd  []string `yaml:"cap_add"`
-	CapDrop []string `yaml:"cap_drop"`
-	Devices []string
+	Privileged bool
+	CapAdd     []string `yaml:"cap_add"`
+	CapDrop    []string `yaml:"cap_drop"`
+	Devices    []string
 }
 
 type GroupConfig struct {
@@ -54,8 +55,9 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 			CpuShares: c.CpuShares,
 			Cpuset:    c.Cpuset,
 
-			CapAdd:  c.CapAdd,
-			CapDrop: c.CapDrop,
+			Privileged: c.Privileged,
+			CapAdd:     c.CapAdd,
+			CapDrop:    c.CapDrop,
 		}
 
 		cmd, ok := parseCommand(c.Command)

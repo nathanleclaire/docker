@@ -87,9 +87,10 @@ type Container struct {
 	CpuShares int64
 	Cpuset    string
 
-	CapAdd  []string
-	CapDrop []string
-	Devices []*Device
+	Privileged bool
+	CapAdd     []string
+	CapDrop    []string
+	Devices    []*Device
 }
 
 type Group struct {
