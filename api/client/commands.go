@@ -2035,12 +2035,7 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 		containerValues.Set("name", name)
 	}
 
-	var data interface{}
-	if hostConfig != nil {
-		data = runconfig.MergeConfigs(config, hostConfig)
-	} else {
-		data = config
-	}
+	mergedConfig := runconfig.MergeConfigs(config, hostConfig)
 
 	var containerIDFile *cidFile
 	if cidfile != "" {
@@ -2052,7 +2047,7 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 	}
 
 	//create the container
-	stream, statusCode, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), data, false)
+	stream, statusCode, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, false)
 	//if image not found try to pull it
 	if statusCode == 404 {
 		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", config.Image)
@@ -2061,7 +2056,7 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 			return nil, err
 		}
 		// Retry
-		if stream, _, err = cli.call("POST", "/containers/create?"+containerValues.Encode(), data, false); err != nil {
+		if stream, _, err = cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, false); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
@@ -2163,7 +2158,7 @@ func (cli *DockerCli) CmdRun(args ...string) error {
 		sigProxy = false
 	}
 
-	runResult, err := cli.createContainer(config, nil, hostConfig.ContainerIDFile, *flName)
+	runResult, err := cli.createContainer(config, hostConfig, hostConfig.ContainerIDFile, *flName)
 	if err != nil {
 		return err
 	}
