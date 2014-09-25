@@ -42,8 +42,6 @@ containers:
       - MKNOD
     devices:
       - /dev/sdc:/dev/xvdc:rwm
-
-    restart: on-failure:3
 `)
 
 var jsonData = []byte(`{
@@ -93,12 +91,7 @@ var jsonData = []byte(`{
           "PathInContainer": "/dev/xvdc",
           "CgroupPermissions": "rwm"
         }
-      ],
-
-      "RestartPolicy": {
-        "Name": "on-failure",
-        "MaximumRetryCount": 3
-      }
+      ]
     }
   ]
 }`)
