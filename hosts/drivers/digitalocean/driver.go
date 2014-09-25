@@ -185,7 +185,7 @@ func (d *Driver) GetIP() (string, error) {
 func (d *Driver) GetState() (state.State, error) {
 	droplet, _, err := d.getClient().Droplets.Get(d.dropletID)
 	if err != nil {
-		return state.Unknown, err
+		return state.None, err
 	}
 	switch droplet.Droplet.Status {
 	case "new":
@@ -195,7 +195,7 @@ func (d *Driver) GetState() (state.State, error) {
 	case "off":
 		return state.Stopped, nil
 	}
-	return state.Unknown, nil
+	return state.None, nil
 }
 
 func (d *Driver) Start() error {

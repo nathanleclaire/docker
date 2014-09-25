@@ -4,7 +4,7 @@ package state
 type State int
 
 const (
-	Unknown State = iota
+	None State = iota
 	Running
 	Paused
 	Saved
@@ -12,7 +12,14 @@ const (
 	Starting
 )
 
-var states = []string{"Unknown", "Running", "Paused", "Saved", "Stopped", "Starting"}
+var states = []string{
+	"",
+	"Running",
+	"Paused",
+	"Saved",
+	"Stopped",
+	"Starting",
+}
 
 func (s State) String() string {
 	if int(s) < len(states)-1 {

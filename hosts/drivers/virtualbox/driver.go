@@ -258,14 +258,14 @@ func (d *Driver) GetState() (state.State, error) {
 		"--machinereadable")
 	if err != nil {
 		if reMachineNotFound.FindString(stderr) != "" {
-			return state.Unknown, ErrMachineNotExist
+			return state.None, ErrMachineNotExist
 		}
-		return state.Unknown, err
+		return state.None, err
 	}
 	re := regexp.MustCompile(`(?m)^VMState="(\w+)"$`)
 	groups := re.FindStringSubmatch(stdout)
 	if len(groups) < 1 {
-		return state.Unknown, nil
+		return state.None, nil
 	}
 	switch groups[1] {
 	case "running":
@@ -277,7 +277,7 @@ func (d *Driver) GetState() (state.State, error) {
 	case "poweroff", "aborted":
 		return state.Stopped, nil
 	}
-	return state.Unknown, nil
+	return state.None, nil
 }
 
 func (d *Driver) setMachineNameIfNotSet() {
