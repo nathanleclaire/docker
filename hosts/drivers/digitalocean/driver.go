@@ -18,22 +18,47 @@ import (
 
 type Driver struct {
 	AccessToken string
-	DropletName string
 	DropletID   int
-	SSHKeyID    int
+	DropletName string
+	Image       string
 	IPAddress   string
+	Region      string
+	SSHKeyID    int
+	Size        string
 	storePath   string
 }
 
 type CreateFlags struct {
 	AccessToken *string
+	Image       *string
+	Region      *string
+	Size        *string
 }
 
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
 func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
 	createFlags := new(CreateFlags)
-	createFlags.AccessToken = cmd.String([]string{"-digitalocean-access-token"}, "", "Digital Ocean access token")
+	createFlags.AccessToken = cmd.String(
+		[]string{"-digitalocean-access-token"},
+		"",
+		"Digital Ocean access token",
+	)
+	createFlags.Image = cmd.String(
+		[]string{"-digitalocean-image"},
+		"docker",
+		"Digital Ocean image",
+	)
+	createFlags.Region = cmd.String(
+		[]string{"-digitalocean-region"},
+		"nyc3",
+		"Digital Ocean region",
+	)
+	createFlags.Size = cmd.String(
+		[]string{"-digitalocean-size"},
+		"512mb",
+		"Digital Ocean size",
+	)
 	return createFlags
 }
 
@@ -48,9 +73,14 @@ func (d *Driver) DriverName() string {
 func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	flags := flagsInterface.(*CreateFlags)
 	d.AccessToken = *flags.AccessToken
+	d.Image = *flags.Image
+	d.Region = *flags.Region
+	d.Size = *flags.Size
+
 	if d.AccessToken == "" {
 		return fmt.Errorf("digitalocean driver requires the --digitalocean-access-token option")
 	}
+
 	return nil
 }
 
@@ -67,10 +97,10 @@ func (d *Driver) Create() error {
 	client := d.getClient()
 
 	createRequest := &godo.DropletCreateRequest{
+		Image:   d.Image,
 		Name:    d.DropletName,
-		Region:  "nyc3",
-		Size:    "512mb",
-		Image:   "docker",
+		Region:  d.Region,
+		Size:    d.Size,
 		SSHKeys: []interface{}{d.SSHKeyID},
 	}
 
