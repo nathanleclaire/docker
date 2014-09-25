@@ -42,7 +42,6 @@ containers:
     devices:
       - /dev/sdc:/dev/xvdc:rwm
 
-    net: host
     privileged: true
     restart: on-failure:3
 `)
@@ -95,8 +94,6 @@ var jsonData = []byte(`{
         }
       ],
 
-
-      "NetworkMode": "host",
       "Privileged": true,
       "RestartPolicy": {
         "Name": "on-failure",
