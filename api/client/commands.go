@@ -2723,12 +2723,34 @@ func loadGroupConfig() (*GroupConfig, error) {
 }
 
 func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
-	cmd := cli.Subcmd("groups create ", "", "Create a new group")
+	cmd := cli.Subcmd("groups create ", "NAME", "Create a new group")
 
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() != 1 {
+		cmd.Usage()
+		return nil
+	}
+
+	group := &api.Group{
+		Name:       cmd.Arg(0),
+		Containers: []*api.Container{},
+	}
+
+	if _, _, err := cli.call("POST", "/groups/create", group, true); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (cli *DockerCli) CmdUp(args ...string) error {
 	raw, err := loadGroupConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
-			cmd.Usage()
+			fmt.Fprintf(cli.err, "Can't find group.yml. Are you in the right directory?\n")
 			return nil
 		}
 
