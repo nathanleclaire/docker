@@ -8,6 +8,7 @@ containers:
     # memory: 4m
     # cpu_shares: 100
     # cpu_set: "0"
+    # tty: true
     # command: sleep 300
 
     # test that NET_ADMIN is enabled - should succeed
@@ -38,3 +39,6 @@ containers:
     # user: someone
     # command: whoami
 
+    # test workdir - should output "/tmp"
+    # working_dir: /tmp
+    # command: pwd

@@ -139,7 +139,9 @@ func asRunConfig(groupDir string, c *api.Container) (*runconfig.Config, error) {
 		ExposedPorts: make(map[nat.Port]struct{}),
 		Volumes:      make(map[string]struct{}),
 
-		User: c.User,
+		User:       c.User,
+		WorkingDir: c.WorkingDir,
+		Tty:        c.Tty,
 
 		Memory:     c.Memory,
 		MemorySwap: -1,

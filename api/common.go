@@ -79,7 +79,9 @@ type Container struct {
 	Volumes []*Volume
 	Links   []string
 
-	User string
+	User       string
+	WorkingDir string
+	Tty        bool
 
 	Memory    int64
 	CpuShares int64

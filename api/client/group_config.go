@@ -21,7 +21,9 @@ type GroupContainer struct {
 	Ports   []string
 	Volumes []string
 
-	User string
+	User       string
+	WorkingDir string `yaml:"working_dir"`
+	Tty        bool
 
 	Memory    string
 	CpuShares int64  `yaml:"cpu_shares"`
@@ -48,8 +50,6 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 		container := &api.Container{
 			Name:  containerName,
 			Image: c.Image,
-
-			User: c.User,
 
 			CpuShares: c.CpuShares,
 			Cpuset:    c.Cpuset,
@@ -130,6 +130,10 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 				})
 			}
 		}
+
+		container.User = c.User
+		container.WorkingDir = c.WorkingDir
+		container.Tty = c.Tty
 
 		for _, rawDevice := range c.Devices {
 			parts := strings.Split(rawDevice, ":")

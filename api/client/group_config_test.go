@@ -28,6 +28,8 @@ containers:
       - /data
 
     user: root
+    working_dir: /workdir
+    tty: true
 
     memory: 1g
     cpu_shares: 100
@@ -40,12 +42,10 @@ containers:
     devices:
       - /dev/sdc:/dev/xvdc:rwm
 
-    hostname: foo.example.com
     net: host
     privileged: true
     restart: on-failure:3
-    tty: true
-    workdir: /workdir`)
+`)
 
 var jsonData = []byte(`{
   "name": "everything",
@@ -78,6 +78,8 @@ var jsonData = []byte(`{
       ],
 
       "User": "root",
+      "WorkingDir": "/workdir",
+      "Tty": true,
 
       "Memory": 1073741824,
       "CpuShares": 100,
@@ -93,16 +95,13 @@ var jsonData = []byte(`{
         }
       ],
 
-      "Hostname": "foo",
-      "Domainname": "example.com",
+
       "NetworkMode": "host",
       "Privileged": true,
       "RestartPolicy": {
         "Name": "on-failure",
         "MaximumRetryCount": 3
-      },
-      "Tty": true,
-      "WorkingDir": "/workdir"
+      }
     }
   ]
 }`)
@@ -137,7 +136,9 @@ var expected = &api.Group{
 				},
 			},
 
-			User: "root",
+			User:       "root",
+			WorkingDir: "/workdir",
+			Tty:        true,
 
 			Memory:    1073741824,
 			CpuShares: 100,
