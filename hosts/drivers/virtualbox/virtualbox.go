@@ -27,16 +27,18 @@ import (
 )
 
 type Driver struct {
-	MachineName string
-	SSHPort     int
-	Memory      int
-	DiskSize    int
-	storePath   string
+	MachineName    string
+	SSHPort        int
+	Memory         int
+	DiskSize       int
+	Boot2DockerURL string
+	storePath      string
 }
 
 type CreateFlags struct {
-	Memory   *int
-	DiskSize *int
+	Memory         *int
+	DiskSize       *int
+	Boot2DockerURL *string
 }
 
 func init() {
@@ -52,6 +54,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags := new(CreateFlags)
 	createFlags.Memory = cmd.Int([]string{"-virtualbox-memory"}, 1024, "Size of memory for host in MB")
 	createFlags.DiskSize = cmd.Int([]string{"-virtualbox-disk-size"}, 20000, "Size of disk for host in MB")
+	createFlags.Boot2DockerURL = cmd.String([]string{"-virtualbox-boot2docker-url"}, "", "The URL of the boot2docker image. Defaults to the latest available version")
 	return createFlags
 }
 
@@ -75,11 +78,15 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	flags := flagsInterface.(*CreateFlags)
 	d.Memory = *flags.Memory
 	d.DiskSize = *flags.DiskSize
+	d.Boot2DockerURL = *flags.Boot2DockerURL
 	return nil
 }
 
 func (d *Driver) Create() error {
-	var err error
+	var (
+		err    error
+		isoURL string
+	)
 
 	d.SSHPort, err = getAvailableTCPPort()
 	if err != nil {
@@ -87,12 +94,16 @@ func (d *Driver) Create() error {
 	}
 	d.setMachineNameIfNotSet()
 
-	tag, err := getLatestReleaseName()
-	if err != nil {
-		return err
+	if d.Boot2DockerURL != "" {
+		isoURL = d.Boot2DockerURL
+	} else {
+		isoURL, err = getLatestReleaseURL()
+		if err != nil {
+			return err
+		}
 	}
-	log.Infof("Downloading boot2docker %s...", tag)
-	if err := downloadISO(d.storePath, "boot2docker.iso", tag); err != nil {
+	log.Infof("Downloading boot2docker...")
+	if err := downloadISO(d.storePath, "boot2docker.iso", isoURL); err != nil {
 		return err
 	}
 
@@ -328,7 +339,7 @@ func (d *Driver) diskPath() string {
 
 // Get the latest boot2docker release tag name (e.g. "v0.6.0").
 // FIXME: find or create some other way to get the "latest release" of boot2docker since the GitHub API has a pretty low rate limit on API requests
-func getLatestReleaseName() (string, error) {
+func getLatestReleaseURL() (string, error) {
 	rsp, err := http.Get("https://api.github.com/repos/boot2docker/boot2docker/releases")
 	if err != nil {
 		return "", err
@@ -344,12 +355,15 @@ func getLatestReleaseName() (string, error) {
 	if len(t) == 0 {
 		return "", fmt.Errorf("no releases found")
 	}
-	return t[0].TagName, nil
+
+	tag := t[0].TagName
+	url := fmt.Sprintf("https://github.com/boot2docker/boot2docker/releases/download/%s/boot2docker.iso", tag)
+	return url, nil
 }
 
 // Download boot2docker ISO image for the given tag and save it at dest.
-func downloadISO(dir, file, tag string) error {
-	rsp, err := http.Get(fmt.Sprintf("https://github.com/boot2docker/boot2docker/releases/download/%s/boot2docker.iso", tag))
+func downloadISO(dir, file, url string) error {
+	rsp, err := http.Get(url)
 	if err != nil {
 		return err
 	}
