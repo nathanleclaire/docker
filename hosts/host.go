@@ -60,9 +60,6 @@ func ValidateHostName(name string) (string, error) {
 }
 
 func (h *Host) Create() error {
-	if err := os.MkdirAll(h.storePath, 0700); err != nil {
-		return err
-	}
 	if err := h.Driver.Create(); err != nil {
 		return err
 	}

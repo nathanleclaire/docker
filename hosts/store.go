@@ -24,6 +24,10 @@ func (s *Store) Create(name string, driverName string, createFlags interface{}) 
 		return nil, fmt.Errorf("Host %q already exists", name)
 	}
 
+	if err := os.MkdirAll(hostPath, 0700); err != nil {
+		return nil, err
+	}
+
 	host, err := NewHost(name, driverName, hostPath)
 	if err != nil {
 		return host, err
@@ -33,6 +37,10 @@ func (s *Store) Create(name string, driverName string, createFlags interface{}) 
 			return host, err
 		}
 	}
+	if err := host.SaveConfig(); err != nil {
+		return host, err
+	}
+
 	if err := host.Create(); err != nil {
 		return host, err
 	}
