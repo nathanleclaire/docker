@@ -87,19 +87,13 @@ func (d *Driver) Create() error {
 	}
 	d.setMachineNameIfNotSet()
 
-	isISODownloaded, err := d.isISODownloaded()
+	tag, err := getLatestReleaseName()
 	if err != nil {
 		return err
 	}
-	if !isISODownloaded {
-		tag, err := getLatestReleaseName()
-		if err != nil {
-			return err
-		}
-		log.Infof("Downloading boot2docker %s...", tag)
-		if err := downloadISO(d.storePath, "boot2docker.iso", tag); err != nil {
-			return err
-		}
+	log.Infof("Downloading boot2docker %s...", tag)
+	if err := downloadISO(d.storePath, "boot2docker.iso", tag); err != nil {
+		return err
 	}
 
 	log.Infof("Creating SSH key...")
@@ -293,16 +287,6 @@ func (d *Driver) setMachineNameIfNotSet() {
 	if d.MachineName == "" {
 		d.MachineName = fmt.Sprintf("docker-host-%s", utils.GenerateRandomID())
 	}
-}
-
-func (d *Driver) isISODownloaded() (bool, error) {
-	if _, err := os.Stat(path.Join(d.storePath, "boot2docker.iso")); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
 }
 
 func (d *Driver) GetIP() (string, error) {
