@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+
+	"github.com/docker/docker/pkg/log"
 )
 
 // Store persists hosts on the filesystem
@@ -65,7 +67,8 @@ func (s *Store) List() ([]Host, error) {
 		if file.IsDir() {
 			host, err := s.Load(file.Name())
 			if err != nil {
-				return nil, err
+				log.Errorf("error loading host %q: %s", file.Name(), err)
+				continue
 			}
 			hosts = append(hosts, *host)
 		}
