@@ -212,6 +212,23 @@ func (d *Driver) Create() error {
 		return err
 	}
 
+	shareName := "Users"
+	shareDir := "/Users"
+
+	if _, err := os.Stat(shareDir); err != nil {
+		return err
+	}
+
+	// woo, shareDir exists!  let's carry on!
+	if err := vbm("sharedfolder", "add", d.MachineName, "--name", shareName, "--hostpath", shareDir, "--automount"); err != nil {
+		return err
+	}
+
+	// enable symlinks
+	if err := vbm("setextradata", d.MachineName, "VBoxInternal2/SharedFoldersEnableSymlinksCreate/"+shareName, "1"); err != nil {
+		return err
+	}
+
 	log.Infof("Starting Virtualbox VM...")
 
 	return d.Start()
