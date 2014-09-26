@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"code.google.com/p/goauth2/oauth"
+	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/pkg/log"
@@ -35,9 +36,16 @@ type CreateFlags struct {
 	Size        *string
 }
 
+func init() {
+	drivers.Register("digitalocean", &drivers.RegisteredDriver{
+		New:                 NewDriver,
+		RegisterCreateFlags: RegisterCreateFlags,
+	})
+}
+
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
-func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
+func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags := new(CreateFlags)
 	createFlags.AccessToken = cmd.String(
 		[]string{"-digitalocean-access-token"},
@@ -62,7 +70,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
 	return createFlags
 }
 
-func NewDriver(storePath string) (*Driver, error) {
+func NewDriver(storePath string) (drivers.Driver, error) {
 	return &Driver{storePath: storePath}, nil
 }
 

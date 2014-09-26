@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/pkg/log"
@@ -38,16 +39,23 @@ type CreateFlags struct {
 	DiskSize *int
 }
 
+func init() {
+	drivers.Register("virtualbox", &drivers.RegisteredDriver{
+		New:                 NewDriver,
+		RegisterCreateFlags: RegisterCreateFlags,
+	})
+}
+
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
-func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
+func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags := new(CreateFlags)
 	createFlags.Memory = cmd.Int([]string{"-virtualbox-memory"}, 1024, "Size of memory for host in MB")
 	createFlags.DiskSize = cmd.Int([]string{"-virtualbox-disk-size"}, 20000, "Size of disk for host in MB")
 	return createFlags
 }
 
-func NewDriver(storePath string) (*Driver, error) {
+func NewDriver(storePath string) (drivers.Driver, error) {
 	return &Driver{storePath: storePath}, nil
 }
 
