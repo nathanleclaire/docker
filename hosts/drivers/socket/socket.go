@@ -5,6 +5,7 @@ import (
 	"os/exec"
 
 	"github.com/docker/docker/api"
+	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/state"
 	flag "github.com/docker/docker/pkg/mflag"
 )
@@ -20,15 +21,22 @@ type CreateFlags struct {
 	URL *string
 }
 
+func init() {
+	drivers.Register("socket", &drivers.RegisteredDriver{
+		New:                 NewDriver,
+		RegisterCreateFlags: RegisterCreateFlags,
+	})
+}
+
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
-func RegisterCreateFlags(cmd *flag.FlagSet) *CreateFlags {
+func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags := new(CreateFlags)
 	createFlags.URL = cmd.String([]string{"-socket-url"}, "", "Socket driver: URL of host")
 	return createFlags
 }
 
-func NewDriver(storePath string) (*Driver, error) {
+func NewDriver(storePath string) (drivers.Driver, error) {
 	return &Driver{storePath: storePath}, nil
 }
 

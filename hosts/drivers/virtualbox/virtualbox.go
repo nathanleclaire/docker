@@ -48,6 +48,13 @@ func init() {
 	})
 }
 
+func init() {
+	drivers.Register("virtualbox", &drivers.RegisteredDriver{
+		New:                 NewDriver,
+		RegisterCreateFlags: RegisterCreateFlags,
+	})
+}
+
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
 func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
