@@ -212,21 +212,43 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	shareName := "Users"
-	shareDir := "/Users"
-
-	if _, err := os.Stat(shareDir); err != nil {
+	// let VBoxService do nice magic automounting (when it's used)
+	if err := vbm("guestproperty", "set", d.MachineName, "/VirtualBox/GuestAdd/SharedFolders/MountPrefix", "/"); err != nil {
+		return err
+	}
+	if err := vbm("guestproperty", "set", d.MachineName, "/VirtualBox/GuestAdd/SharedFolders/MountDir", "/"); err != nil {
 		return err
 	}
 
-	// woo, shareDir exists!  let's carry on!
-	if err := vbm("sharedfolder", "add", d.MachineName, "--name", shareName, "--hostpath", shareDir, "--automount"); err != nil {
-		return err
+	var shareName, shareDir string // TODO configurable at some point
+	switch runtime.GOOS {
+	case "darwin":
+		shareName = "Users"
+		shareDir = "/Users"
+		// TODO "linux" and "windows"
 	}
 
-	// enable symlinks
-	if err := vbm("setextradata", d.MachineName, "VBoxInternal2/SharedFoldersEnableSymlinksCreate/"+shareName, "1"); err != nil {
-		return err
+	if shareDir != "" {
+		if _, err := os.Stat(shareDir); err != nil && !os.IsNotExist(err) {
+			return err
+		} else if !os.IsNotExist(err) {
+			if shareName == "" {
+				// parts of the VBox internal code are buggy with share names that start with "/"
+				shareName = strings.TrimLeft(shareDir, "/")
+				// TODO do some basic Windows -> MSYS path conversion
+				// ie, s!^([a-z]+):[/\\]+!\1/!; s!\\!/!g
+			}
+
+			// woo, shareDir exists!  let's carry on!
+			if err := vbm("sharedfolder", "add", d.MachineName, "--name", shareName, "--hostpath", shareDir, "--automount"); err != nil {
+				return err
+			}
+
+			// enable symlinks
+			if err := vbm("setextradata", d.MachineName, "VBoxInternal2/SharedFoldersEnableSymlinksCreate/"+shareName, "1"); err != nil {
+				return err
+			}
+		}
 	}
 
 	log.Infof("Starting Virtualbox VM...")
