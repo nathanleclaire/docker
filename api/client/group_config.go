@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -40,9 +41,21 @@ type GroupConfig struct {
 	Containers map[string]*GroupContainer
 }
 
+type GroupContext struct {
+	CurrentDirectory string
+}
+
+func (ctx *GroupContext) Expand(path string) string {
+	if filepath.IsAbs(path) {
+		return path
+	} else {
+		return filepath.Join(ctx.CurrentDirectory, path)
+	}
+}
+
 // Transforms a GroupConfig (read from YAML) into an api.Group (for posting as JSON)
 // Does not handle auto-build or auto-pull of images - see cli.transformGroupConfig
-func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
+func preprocessGroupConfig(raw *GroupConfig, ctx *GroupContext) (*api.Group, error) {
 	group := &api.Group{
 		Name: raw.Name,
 	}
@@ -121,13 +134,13 @@ func preprocessGroupConfig(raw *GroupConfig) (*api.Group, error) {
 			case 2:
 				container.Volumes = append(container.Volumes, &api.Volume{
 					Container: parts[1],
-					Host:      parts[0],
+					Host:      ctx.Expand(parts[0]),
 					Mode:      "rw",
 				})
 			case 3:
 				container.Volumes = append(container.Volumes, &api.Volume{
 					Container: parts[1],
-					Host:      parts[0],
+					Host:      ctx.Expand(parts[0]),
 					Mode:      strings.ToUpper(parts[2]),
 				})
 			}
@@ -199,7 +212,11 @@ func parseListOfStrings(v []interface{}) ([]string, bool) {
 
 // Transforms a GroupConfig (read from YAML) into an api.Group (for posting as JSON)
 func (cli *DockerCli) transformGroupConfig(raw *GroupConfig) (*api.Group, error) {
-	group, err := preprocessGroupConfig(raw)
+	pwd, err := filepath.Abs(".")
+	if err != nil {
+		return nil, err
+	}
+	group, err := preprocessGroupConfig(raw, &GroupContext{CurrentDirectory: pwd})
 	if err != nil {
 		return nil, err
 	}

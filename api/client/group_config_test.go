@@ -26,6 +26,7 @@ containers:
       - "8001:8000"
     volumes:
       - /data
+      - .:/code
 
     user: root
     working_dir: /workdir
@@ -70,6 +71,11 @@ var jsonData = []byte(`{
         {
           "Container": "/data",
           "Host": "",
+          "Mode": "rw"
+        },
+        {
+          "Container": "/code",
+          "Host": "/pwd/on/host",
           "Mode": "rw"
         }
       ],
@@ -124,6 +130,11 @@ var expected = &api.Group{
 					Host:      "",
 					Mode:      "rw",
 				},
+				&api.Volume{
+					Container: "/code",
+					Host:      "/pwd/on/host",
+					Mode:      "rw",
+				},
 			},
 
 			User:       "root",
@@ -154,7 +165,9 @@ func TestYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fromYAML, err := preprocessGroupConfig(raw)
+	fromYAML, err := preprocessGroupConfig(raw, &GroupContext{
+		CurrentDirectory: "/pwd/on/host",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
