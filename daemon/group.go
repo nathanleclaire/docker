@@ -172,6 +172,10 @@ func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) e
 	fullName := filepath.Join("group-"+groupName, c.Name)
 
 	if container := daemon.Get(fullName); container != nil {
+		if err := container.Kill(); err != nil {
+			return err
+		}
+
 		if err := daemon.Destroy(container); err != nil {
 			return err
 		}
