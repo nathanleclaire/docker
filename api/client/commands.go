@@ -182,9 +182,14 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 
 	//Check if the given image name can be resolved
 	if *tag != "" {
-		repository, _ := parsers.ParseRepositoryTag(*tag)
+		repository, tag := parsers.ParseRepositoryTag(*tag)
 		if _, _, err := registry.ResolveRepositoryName(repository); err != nil {
 			return err
+		}
+		if len(tag) > 0 {
+			if err := graph.ValidateTagName(tag); err != nil {
+				return err
+			}
 		}
 	}
 
