@@ -71,6 +71,9 @@ func (d *Driver) GetURL() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if ip == "" {
+		return "", nil
+	}
 	return fmt.Sprintf("tcp://%s:2375", ip), nil
 }
 
@@ -340,6 +343,16 @@ func (d *Driver) setMachineNameIfNotSet() {
 }
 
 func (d *Driver) GetIP() (string, error) {
+	// DHCP is used to get the IP, so virtualbox hosts don't have IPs unless
+	// they are running
+	s, err := d.GetState()
+	if err != nil {
+		return "", err
+	}
+	if s != state.Running {
+		return "", nil
+	}
+
 	cmd := d.GetSSHCommand("ip addr show dev eth1")
 
 	b, err := cmd.Output()
