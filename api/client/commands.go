@@ -2506,7 +2506,7 @@ func (cli *DockerCli) CmdExec(args ...string) error {
 }
 
 func (cli *DockerCli) CmdHosts(args ...string) error {
-	description := "Manage Docker hosts\n\nCommands:\n"
+	description := "Create and manage hosts running Docker on various providers.\n\nCommands:\n"
 	for _, command := range [][]string{
 		{"active", "Get or set the active host"},
 		{"create", "Create a host"},
@@ -2515,7 +2515,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 		{"list", "List hosts (default)"},
 		{"restart", "Restart a host"},
 		{"rm", "Remove a host"},
-		{"ssh", "Run SSH on a host"},
+		{"ssh", "Log into or run a command on a host with SSH"},
 		{"start", "Start a host"},
 		{"stop", "Stop a host"},
 	} {
@@ -2732,7 +2732,7 @@ func (cli *DockerCli) CmdHostsKill(args ...string) error {
 }
 
 func (cli *DockerCli) CmdHostsSsh(args ...string) error {
-	cmd := cli.Subcmd("hosts ssh", "NAME", "Run SSH on a host")
+	cmd := cli.Subcmd("hosts ssh", "NAME [COMMAND ...]", "Log into or run a command on a host with SSH")
 	if err := cmd.Parse(args); err != nil {
 		return err
 	}
