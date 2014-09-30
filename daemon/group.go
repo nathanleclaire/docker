@@ -110,8 +110,8 @@ func (daemon *Daemon) createGroup(config *api.Group) error {
 		return err
 	}
 
-	if _, err := daemon.containerGraph.Set("group-"+config.Name, config.Name); err != nil {
-		return fmt.Errorf("path: %s id: %s: %s", "group-"+config.Name, config.Name, err)
+	if _, err := daemon.containerGraph.Set(config.Name, config.Name); err != nil {
+		return fmt.Errorf("path: %s id: %s: %s", config.Name, config.Name, err)
 	}
 
 	return nil
@@ -169,7 +169,7 @@ func hashPath(p string) string {
 }
 
 func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) error {
-	fullName := filepath.Join("group-"+groupName, c.Name)
+	fullName := filepath.Join(groupName, c.Name)
 
 	if container := daemon.Get(fullName); container != nil {
 		if err := container.Kill(); err != nil {
@@ -255,7 +255,7 @@ func (daemon *Daemon) fetchGroupsContainers(name string) (map[string]*Container,
 
 	containers := make(map[string]*Container)
 	for _, cconfig := range config.Containers {
-		c := daemon.Get(filepath.Join("group-"+config.Name, cconfig.Name))
+		c := daemon.Get(filepath.Join(config.Name, cconfig.Name))
 		if c == nil {
 			return nil, fmt.Errorf("container does not exist for group %s", cconfig.Name)
 		}
