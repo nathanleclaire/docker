@@ -3,6 +3,7 @@ package drivers
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 
 	"github.com/docker/docker/hosts/state"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -68,4 +69,14 @@ func RegisterCreateFlags(cmd *flag.FlagSet) map[string]interface{} {
 		flags[driverName] = driver.RegisterCreateFlags(cmd)
 	}
 	return flags
+}
+
+// GetDriverNames returns a slice of all registered driver names
+func GetDriverNames() []string {
+	names := make([]string, 0, len(drivers))
+	for k := range drivers {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
 }

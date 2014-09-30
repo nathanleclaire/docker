@@ -2586,7 +2586,12 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	cmd := cli.Subcmd("hosts create", "NAME", "Create hosts")
 
-	driver := cmd.String([]string{"d", "-driver"}, "socket", "Driver to create host with")
+	driverDesc := fmt.Sprintf(
+		"Driver to create host with. Available drivers: %s",
+		strings.Join(drivers.GetDriverNames(), ", "),
+	)
+
+	driver := cmd.String([]string{"d", "-driver"}, "socket", driverDesc)
 
 	createFlags := drivers.RegisterCreateFlags(cmd)
 
