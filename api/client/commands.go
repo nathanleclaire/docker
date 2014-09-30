@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api"
-	"github.com/docker/docker/archive"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/hosts"
@@ -36,6 +35,7 @@ import (
 	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
+	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/log"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/pkg/parsers"
