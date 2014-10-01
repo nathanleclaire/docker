@@ -2627,15 +2627,6 @@ func (cli *DockerCli) CmdGroupsList(args ...string) error {
 	return w.Flush()
 }
 
-func getNameFromGroupConfig() (string, error) {
-	config, err := loadGroupConfig()
-	if err != nil {
-		return "", err
-	}
-
-	return config.Name, nil
-}
-
 func (cli *DockerCli) CmdGroupsStart(args ...string) error {
 	cmd := cli.Subcmd("groups start ", "[NAME]", "Start all container's in the group")
 
@@ -2643,18 +2634,11 @@ func (cli *DockerCli) CmdGroupsStart(args ...string) error {
 		return err
 	}
 
-	var name string
 	if cmd.NArg() != 1 {
-		group, err := loadGroupConfig()
-		if err != nil {
-			cmd.Usage()
-			return nil
-		}
-
-		name = group.Name
-	} else {
-		name = cmd.Arg(0)
+		cmd.Usage()
+		return nil
 	}
+	name := cmd.Arg(0)
 
 	_, _, err := cli.call("POST", fmt.Sprintf("/groups/%s/start", name), nil, true)
 	return err
@@ -2667,18 +2651,11 @@ func (cli *DockerCli) CmdGroupsStop(args ...string) error {
 		return err
 	}
 
-	var name string
 	if cmd.NArg() != 1 {
-		group, err := loadGroupConfig()
-		if err != nil {
-			cmd.Usage()
-			return nil
-		}
-
-		name = group.Name
-	} else {
-		name = cmd.Arg(0)
+		cmd.Usage()
+		return nil
 	}
+	name := cmd.Arg(0)
 
 	_, _, err := cli.call("POST", fmt.Sprintf("/groups/%s/stop", name), nil, true)
 	return err
@@ -2691,35 +2668,14 @@ func (cli *DockerCli) CmdGroupsRm(args ...string) error {
 		return err
 	}
 
-	var name string
 	if cmd.NArg() != 1 {
-		group, err := loadGroupConfig()
-		if err != nil {
-			cmd.Usage()
-			return nil
-		}
-
-		name = group.Name
-	} else {
-		name = cmd.Arg(0)
+		cmd.Usage()
+		return nil
 	}
+	name := cmd.Arg(0)
 
 	_, _, err := cli.call("DELETE", fmt.Sprintf("/groups/%s", name), nil, true)
 	return err
-}
-
-func loadGroupConfig() (*GroupConfig, error) {
-	data, err := ioutil.ReadFile("group.yml")
-	if err != nil {
-		return nil, err
-	}
-
-	var raw *GroupConfig
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-
-	return raw, nil
 }
 
 func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
@@ -2772,4 +2728,18 @@ func (cli *DockerCli) CmdUp(args ...string) error {
 
 	return nil
 
+}
+
+func loadGroupConfig() (*GroupConfig, error) {
+	data, err := ioutil.ReadFile("group.yml")
+	if err != nil {
+		return nil, err
+	}
+
+	var raw *GroupConfig
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	return raw, nil
 }
