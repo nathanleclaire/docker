@@ -112,6 +112,17 @@ func (s *Store) GetActive() (*Host, error) {
 	return s.Load(string(hostName))
 }
 
+func (s *Store) IsActive(host *Host) (bool, error) {
+	active, err := s.GetActive()
+	if err != nil {
+		return false, err
+	}
+	if active == nil {
+		return false, nil
+	}
+	return active.Name == host.Name, nil
+}
+
 func (s *Store) SetActive(host *Host) error {
 	if err := os.MkdirAll(path.Dir(s.activePath()), 0700); err != nil {
 		return err
