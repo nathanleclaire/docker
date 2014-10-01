@@ -188,9 +188,7 @@ func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) e
 		return err
 	}
 
-	// do not pass a container name here and let docker auto generate the default name
-	// we will set the name scoped to the group later
-	container, _, err := daemon.Create(config, "")
+	container, _, err := daemon.CreateInGroup(config, c.Name, groupName)
 	if err != nil {
 		// TODO: atomic abort and cleanup??????
 		return err
@@ -204,13 +202,8 @@ func (daemon *Daemon) updateGroupContainer(groupName string, c *api.Container) e
 		return err
 	}
 
-	container.Group = groupName
 	if err := container.ToDisk(); err != nil {
 		return err
-	}
-
-	if _, err := daemon.containerGraph.Set(fullName, container.ID); err != nil {
-		return fmt.Errorf("%s %s: %s", fullName, container.ID, err)
 	}
 
 	log.Printf("created %s (%s)\n", fullName, container.ID)

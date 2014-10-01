@@ -273,7 +273,7 @@ func (daemon *Daemon) register(container *Container, updateSuffixarray bool) err
 
 func (daemon *Daemon) ensureName(container *Container) error {
 	if container.Name == "" {
-		name, err := daemon.generateNewName(container.ID)
+		name, err := daemon.generateNewName(container.ID, container.Group)
 		if err != nil {
 			return err
 		}
@@ -357,7 +357,7 @@ func (daemon *Daemon) restore() error {
 	// Any containers that are left over do not exist in the graph
 	for _, container := range containers {
 		// Try to set the default name for a container if it exists prior to links
-		container.Name, err = daemon.generateNewName(container.ID)
+		container.Name, err = daemon.generateNewName(container.ID, container.Group)
 		if err != nil {
 			log.Debugf("Setting default id - %s", err)
 		}
@@ -428,29 +428,33 @@ func (daemon *Daemon) mergeAndVerifyConfig(config *runconfig.Config, img *image.
 	return warnings, nil
 }
 
-func (daemon *Daemon) generateIdAndName(name string) (string, string, error) {
+func (daemon *Daemon) generateIdAndName(name, groupName string) (string, string, error) {
 	var (
 		err error
 		id  = utils.GenerateRandomID()
 	)
 
 	if name == "" {
-		if name, err = daemon.generateNewName(id); err != nil {
+		if name, err = daemon.generateNewName(id, groupName); err != nil {
 			return "", "", err
 		}
 		return id, name, nil
 	}
 
-	if name, err = daemon.reserveName(id, name); err != nil {
+	if name, err = daemon.reserveName(id, name, groupName); err != nil {
 		return "", "", err
 	}
 
 	return id, name, nil
 }
 
-func (daemon *Daemon) reserveName(id, name string) (string, error) {
+func (daemon *Daemon) reserveName(id, name, groupName string) (string, error) {
 	if !validContainerNamePattern.MatchString(name) {
 		return "", fmt.Errorf("Invalid container name (%s), only %s are allowed", name, validContainerNameChars)
+	}
+
+	if groupName != "" {
+		name = filepath.Join(groupName, name)
 	}
 
 	if name[0] != '/' {
@@ -482,10 +486,13 @@ func (daemon *Daemon) reserveName(id, name string) (string, error) {
 	return name, nil
 }
 
-func (daemon *Daemon) generateNewName(id string) (string, error) {
+func (daemon *Daemon) generateNewName(id, groupName string) (string, error) {
 	var name string
 	for i := 0; i < 6; i++ {
 		name = namesgenerator.GetRandomName(i)
+		if groupName != "" {
+			name = filepath.Join(groupName, name)
+		}
 		if name[0] != '/' {
 			name = "/" + name
 		}
@@ -529,12 +536,12 @@ func (daemon *Daemon) getEntrypointAndArgs(configEntrypoint, configCmd []string)
 	return entrypoint, args
 }
 
-func (daemon *Daemon) newContainer(name string, config *runconfig.Config, img *image.Image) (*Container, error) {
+func (daemon *Daemon) newContainer(name, groupName string, config *runconfig.Config, img *image.Image) (*Container, error) {
 	var (
 		id  string
 		err error
 	)
-	id, name, err = daemon.generateIdAndName(name)
+	id, name, err = daemon.generateIdAndName(name, groupName)
 	if err != nil {
 		return nil, err
 	}

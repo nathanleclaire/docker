@@ -63,6 +63,10 @@ func (daemon *Daemon) ContainerCreate(job *engine.Job) engine.Status {
 
 // Create creates a new container from the given configuration with a given name.
 func (daemon *Daemon) Create(config *runconfig.Config, name string) (*Container, []string, error) {
+	return daemon.CreateInGroup(config, "", name)
+}
+
+func (daemon *Daemon) CreateInGroup(config *runconfig.Config, name, groupName string) (*Container, []string, error) {
 	var (
 		container *Container
 		warnings  []string
@@ -78,9 +82,10 @@ func (daemon *Daemon) Create(config *runconfig.Config, name string) (*Container,
 	if warnings, err = daemon.mergeAndVerifyConfig(config, img); err != nil {
 		return nil, nil, err
 	}
-	if container, err = daemon.newContainer(name, config, img); err != nil {
+	if container, err = daemon.newContainer(name, groupName, config, img); err != nil {
 		return nil, nil, err
 	}
+	container.Group = groupName
 	if err := daemon.createRootfs(container, img); err != nil {
 		return nil, nil, err
 	}
