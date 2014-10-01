@@ -2554,12 +2554,12 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 		return err
 	}
 
-	w := tabwriter.NewWriter(cli.out, 20, 1, 3, ' ', 0)
+	w := tabwriter.NewWriter(cli.out, 5, 1, 3, ' ', 0)
 
 	if !*quiet {
 		fmt.Fprintln(w, "NAME\tACTIVE\tDRIVER\tSTATE\tURL")
 	}
-	w.Flush()
+	// w.Flush()
 
 	for _, host := range hostList {
 		if *quiet {
@@ -2588,9 +2588,11 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				host.Name, activeString, host.Driver.DriverName(), state.String(), url)
-			w.Flush()
+			// w.Flush()
 		}
 	}
+
+	w.Flush()
 
 	return nil
 }
