@@ -2556,7 +2556,7 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 	w := tabwriter.NewWriter(cli.out, 20, 1, 3, ' ', 0)
 
 	if !*quiet {
-		fmt.Fprintln(w, "NAME\tACTIVE\tDRIVER\tSTATE\tURL")
+		fmt.Fprintln(w, "NAME\tACTIVE\tDRIVER\tSTATE")
 	}
 	w.Flush()
 
@@ -2580,13 +2580,8 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 				log.Errorf("error getting state for host %s: %s", host.Name, err)
 			}
 
-			url, err := host.Driver.GetURL()
-			if err != nil {
-				log.Errorf("error getting URL for host %s: %s", host.Name, err)
-			}
-
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-				host.Name, activeString, host.Driver.DriverName(), state.String(), url)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+				host.Name, activeString, host.Driver.DriverName(), state.String())
 			w.Flush()
 		}
 	}
