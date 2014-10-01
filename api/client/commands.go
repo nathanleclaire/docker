@@ -2615,7 +2615,7 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	if err := store.SetActive(host); err != nil {
 		return err
 	}
-	log.Infof("%q has been created and is now the active host. Docker commands you run will now run against that host.", name)
+	log.Infof("%q has been created and is now the active host. Docker commands will now run against that host.", name)
 	return nil
 }
 
