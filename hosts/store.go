@@ -51,6 +51,16 @@ func (s *Store) Create(name string, driverName string, createFlags interface{}) 
 }
 
 func (s *Store) Remove(name string) error {
+	active, err := s.GetActive()
+	if err != nil {
+		return err
+	}
+	if active != nil && active.Name == name {
+		if err := s.RemoveActive(); err != nil {
+			return err
+		}
+	}
+
 	host, err := s.Load(name)
 	if err != nil {
 		return err
@@ -107,6 +117,10 @@ func (s *Store) SetActive(host *Host) error {
 		return err
 	}
 	return ioutil.WriteFile(s.activePath(), []byte(host.Name), 0600)
+}
+
+func (s *Store) RemoveActive() error {
+	return os.Remove(s.activePath())
 }
 
 // activePath returns the path to the file that stores the name of the
