@@ -2601,7 +2601,7 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 	w := tabwriter.NewWriter(cli.out, 5, 1, 3, ' ', 0)
 
 	if !*quiet {
-		fmt.Fprintln(w, "NAME\tACTIVE\tDRIVER\tSTATE")
+		fmt.Fprintln(w, "NAME\tACTIVE\tDRIVER\tSTATE\tURL")
 	}
 
 	stateChan := make(chan state.State)
