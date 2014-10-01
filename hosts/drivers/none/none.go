@@ -14,8 +14,7 @@ import (
 // connect to existing Docker hosts by specifying the URL of the host as
 // an option.
 type Driver struct {
-	URL       string
-	storePath string
+	URL string
 }
 
 type CreateFlags struct {
@@ -38,7 +37,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 }
 
 func NewDriver(storePath string) (drivers.Driver, error) {
-	return &Driver{storePath: storePath}, nil
+	return &Driver{}, nil
 }
 
 func (d *Driver) DriverName() string {
