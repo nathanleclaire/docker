@@ -20,6 +20,14 @@ func NewStore() *Store {
 }
 
 func (s *Store) Create(name string, driverName string, createFlags interface{}) (*Host, error) {
+	exists, err := s.Exists(name)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("Host %q already exists", name)
+	}
+
 	hostPath := path.Join(s.Path, name)
 
 	host, err := NewHost(name, driverName, hostPath)
@@ -30,10 +38,6 @@ func (s *Store) Create(name string, driverName string, createFlags interface{}) 
 		if err := host.Driver.SetConfigFromFlags(createFlags); err != nil {
 			return host, err
 		}
-	}
-
-	if _, err := os.Stat(hostPath); err == nil {
-		return nil, fmt.Errorf("Host %q already exists", name)
 	}
 
 	if err := os.MkdirAll(hostPath, 0700); err != nil {
@@ -73,9 +77,21 @@ func (s *Store) List() ([]Host, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	var hosts []Host
+
+	// Default host always exists
+	defaultHost, err := s.Load("default")
+	if err != nil {
+		return nil, err
+	}
+
+	hosts := []Host{*defaultHost}
+
 	for _, file := range dir {
 		if file.IsDir() {
+			// Ignore directories called default
+			if file.Name() == "default" {
+				continue
+			}
 			host, err := s.Load(file.Name())
 			if err != nil {
 				log.Errorf("error loading host %q: %s", file.Name(), err)
@@ -88,6 +104,9 @@ func (s *Store) List() ([]Host, error) {
 }
 
 func (s *Store) Exists(name string) (bool, error) {
+	if name == "default" {
+		return true, nil
+	}
 	_, err := os.Stat(path.Join(s.Path, name))
 	if os.IsNotExist(err) {
 		return false, nil
@@ -105,7 +124,7 @@ func (s *Store) Load(name string) (*Host, error) {
 func (s *Store) GetActive() (*Host, error) {
 	hostName, err := ioutil.ReadFile(s.activePath())
 	if os.IsNotExist(err) {
-		return nil, nil
+		return s.Load("default")
 	} else if err != nil {
 		return nil, err
 	}
