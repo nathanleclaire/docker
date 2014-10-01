@@ -16,7 +16,7 @@ func TestStoreCreate(t *testing.T) {
 	}
 
 	store := NewStore()
-	host, err := store.Create("test", "socket", map[string]string{
+	host, err := store.Create("test", "none", map[string]string{
 		"url": "unix:///var/run/docker.sock",
 	})
 	if err != nil {
@@ -37,7 +37,7 @@ func TestStoreRemove(t *testing.T) {
 	}
 
 	store := NewStore()
-	_, err := store.Create("test", "socket", map[string]string{
+	_, err := store.Create("test", "none", map[string]string{
 		"url": "unix:///var/run/docker.sock",
 	})
 	if err != nil {
@@ -62,7 +62,7 @@ func TestStoreList(t *testing.T) {
 	}
 
 	store := NewStore()
-	_, err := store.Create("test", "socket", map[string]string{
+	_, err := store.Create("test", "none", map[string]string{
 		"url": "unix:///var/run/docker.sock",
 	})
 	if err != nil {
@@ -87,7 +87,7 @@ func TestStoreExists(t *testing.T) {
 	if exists {
 		t.Fatal("Exists returned true when it should have been false")
 	}
-	_, err = store.Create("test", "socket", map[string]string{
+	_, err = store.Create("test", "none", map[string]string{
 		"url": "unix:///var/run/docker.sock",
 	})
 	if err != nil {
@@ -108,7 +108,7 @@ func TestStoreLoad(t *testing.T) {
 	}
 
 	store := NewStore()
-	_, err := store.Create("test", "socket", map[string]string{
+	_, err := store.Create("test", "none", map[string]string{
 		"url": "unix:///var/run/docker.sock",
 	})
 	if err != nil {
