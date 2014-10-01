@@ -29,7 +29,7 @@ import (
 	"github.com/docker/docker/hosts"
 	"github.com/docker/docker/hosts/drivers"
 	_ "github.com/docker/docker/hosts/drivers/digitalocean"
-	_ "github.com/docker/docker/hosts/drivers/socket"
+	_ "github.com/docker/docker/hosts/drivers/none"
 	_ "github.com/docker/docker/hosts/drivers/virtualbox"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
@@ -2605,7 +2605,7 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 		strings.Join(drivers.GetDriverNames(), ", "),
 	)
 
-	driver := cmd.String([]string{"d", "-driver"}, "socket", driverDesc)
+	driver := cmd.String([]string{"d", "-driver"}, "none", driverDesc)
 
 	createFlags := drivers.RegisterCreateFlags(cmd)
 
