@@ -4,6 +4,8 @@ import (
 	"os"
 	"path"
 	"testing"
+
+	none "github.com/docker/docker/hosts/drivers/none"
 )
 
 func clearHosts() error {
@@ -16,9 +18,8 @@ func TestStoreCreate(t *testing.T) {
 	}
 
 	store := NewStore()
-	host, err := store.Create("test", "none", map[string]string{
-		"url": "unix:///var/run/docker.sock",
-	})
+	url := "unix:///var/run/docker.sock"
+	host, err := store.Create("test", "none", &none.CreateFlags{URL: &url})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,9 +38,8 @@ func TestStoreRemove(t *testing.T) {
 	}
 
 	store := NewStore()
-	_, err := store.Create("test", "none", map[string]string{
-		"url": "unix:///var/run/docker.sock",
-	})
+	url := "unix:///var/run/docker.sock"
+	_, err := store.Create("test", "none", &none.CreateFlags{URL: &url})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,9 +62,8 @@ func TestStoreList(t *testing.T) {
 	}
 
 	store := NewStore()
-	_, err := store.Create("test", "none", map[string]string{
-		"url": "unix:///var/run/docker.sock",
-	})
+	url := "unix:///var/run/docker.sock"
+	_, err := store.Create("test", "none", &none.CreateFlags{URL: &url})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,9 +86,8 @@ func TestStoreExists(t *testing.T) {
 	if exists {
 		t.Fatal("Exists returned true when it should have been false")
 	}
-	_, err = store.Create("test", "none", map[string]string{
-		"url": "unix:///var/run/docker.sock",
-	})
+	url := "unix:///var/run/docker.sock"
+	_, err = store.Create("test", "none", &none.CreateFlags{URL: &url})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,9 +106,8 @@ func TestStoreLoad(t *testing.T) {
 	}
 
 	store := NewStore()
-	_, err := store.Create("test", "none", map[string]string{
-		"url": "unix:///var/run/docker.sock",
-	})
+	url := "unix:///var/run/docker.sock"
+	_, err := store.Create("test", "none", &none.CreateFlags{URL: &url})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,9 +123,8 @@ func TestStoreGetSetActive(t *testing.T) {
 	}
 
 	store := NewStore()
-	originalHost, err := store.Create("test", "socket", map[string]string{
-		"url": "unix:///var/run/docker.sock",
-	})
+	url := "unix:///var/run/docker.sock"
+	originalHost, err := store.Create("test", "none", &none.CreateFlags{URL: &url})
 	if err != nil {
 		t.Fatal(err)
 	}
