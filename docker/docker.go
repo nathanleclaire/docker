@@ -41,10 +41,11 @@ func main() {
 
 	store := hosts.NewStore()
 
+	defaultHost := ""
+
 	if len(flHosts) == 0 {
-		defaultHost := os.Getenv("DOCKER_HOST")
 		// If the client, attempt to get active host
-		if defaultHost == "" && !*flDaemon {
+		if !*flDaemon {
 			host, err := store.GetActive()
 			if err != nil {
 				log.Fatal(err)
@@ -56,6 +57,12 @@ func main() {
 				}
 			}
 		}
+
+		// Read the DOCKER_HOST environment variable if there is no active host
+		if defaultHost == "" {
+			defaultHost = os.Getenv("DOCKER_HOST")
+		}
+
 		if defaultHost == "" || *flDaemon {
 			// If we do not have a host, default to unix socket
 			defaultHost = fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET)
