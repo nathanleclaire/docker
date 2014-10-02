@@ -2661,6 +2661,23 @@ func (cli *DockerCli) CmdGroupsStop(args ...string) error {
 	return err
 }
 
+func (cli *DockerCli) CmdGroupsKill(args ...string) error {
+	cmd := cli.Subcmd("groups kill ", "[NAME]", "Kill all containers in a group")
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() != 1 {
+		cmd.Usage()
+		return nil
+	}
+	name := cmd.Arg(0)
+
+	_, _, err := cli.call("POST", fmt.Sprintf("/groups/%s/kill", name), nil, true)
+	return err
+}
+
 func (cli *DockerCli) CmdGroupsRm(args ...string) error {
 	cmd := cli.Subcmd("groups rm ", "[NAME]", "Remove a group and all of it's containers")
 

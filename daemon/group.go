@@ -57,6 +57,21 @@ func (daemon *Daemon) GroupsStop(name string) error {
 	return nil
 }
 
+func (daemon *Daemon) GroupsKill(name string) error {
+	containers, err := daemon.fetchGroupsContainers(name)
+	if err != nil {
+		return err
+	}
+
+	for _, c := range containers {
+		if err := c.Kill(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (daemon *Daemon) GroupsDelete(name string) error {
 	containers, err := daemon.fetchGroupsContainers(name)
 	if err != nil {

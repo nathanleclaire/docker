@@ -1159,6 +1159,16 @@ func getGroups(eng *engine.Engine, version version.Version, w http.ResponseWrite
 	return json.NewEncoder(w).Encode(groups)
 }
 
+func postGroupsKill(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	name := vars["name"]
+
+	daemon := eng.Hack_GetGlobalVar("httpapi.daemon").(interface {
+		GroupsKill(string) error
+	})
+
+	return daemon.GroupsKill(name)
+}
+
 func postGroupsStop(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	name := vars["name"]
 
@@ -1319,6 +1329,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, dockerVersion st
 			"/groups/create":                postGroupsCreate,
 			"/groups/{name:.*}/start":       postGroupsStart,
 			"/groups/{name:.*}/stop":        postGroupsStop,
+			"/groups/{name:.*}/kill":        postGroupsKill,
 		},
 		"DELETE": {
 			"/containers/{name:.*}": deleteContainers,
