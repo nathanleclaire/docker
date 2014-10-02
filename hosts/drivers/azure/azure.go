@@ -1,0 +1,453 @@
+package azure
+
+import (
+	"fmt"
+	"os/exec"
+	"strconv"
+	"net/http"
+	"strings"
+	"time"
+	"io"
+	"crypto/rand"
+	"path"
+	
+	"github.com/docker/docker/hosts/drivers"
+	"github.com/docker/docker/hosts/ssh"
+	"github.com/docker/docker/hosts/state"
+	flag "github.com/docker/docker/pkg/mflag"
+	azure "github.com/MSOpenTech/azure-sdk-for-go"
+	"github.com/MSOpenTech/azure-sdk-for-go/clients/vmClient"
+)
+
+type Driver struct {
+	SubscriptionID 			string
+	SubscriptionCert		string
+	PublishSettingsFilePath	string
+	IPAddress   			string
+	Name 					string
+	Location    			string
+	Size        			string
+	UserName        		string
+	UserPassword        	string
+	Image       			string
+	SshPort         		int
+	DockerCertDir   		string
+	DockerPort      		int
+	storePath   			string
+}
+
+type CreateFlags struct {
+	SubscriptionID 			*string
+	SubscriptionCert        *string
+	PublishSettingsFilePath *string
+	Name 					*string
+	Location    			*string
+	Size        			*string
+	UserName        		*string
+	UserPassword        	*string
+	Image       			*string
+	SshPort         		*string
+	DockerCertDir   		*string
+	DockerPort      		*string
+}
+
+func init() {
+	drivers.Register("azure", &drivers.RegisteredDriver{
+		New:                 NewDriver,
+		RegisterCreateFlags: RegisterCreateFlags,
+	})
+}
+
+//Region public methods starts
+
+// RegisterCreateFlags registers the flags this driver adds to
+// "docker hosts create"
+func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
+	createFlags := new(CreateFlags)
+	createFlags.SubscriptionID = cmd.String(
+		[]string{"-azure-subscription-id"},
+		"",
+		"Azure subscription ID",
+	)
+	createFlags.SubscriptionCert = cmd.String(
+		[]string{"-azure-subscription-cert"},
+		"",
+		"Azure subscription cert",
+	)
+	createFlags.PublishSettingsFilePath = cmd.String(
+		[]string{"-azure-publish-settings-file"},
+		"",
+		"Azure publish settings file",
+	)
+	createFlags.Location = cmd.String(
+		[]string{"-azure-location"},
+		"West US",
+		"Azure location",
+	)
+	createFlags.Size = cmd.String(
+		[]string{"-azure-size"},
+		"Small",
+		"Azure size",
+	)
+	createFlags.Name = cmd.String(
+		[]string{"-azure-name"},
+		"",
+		"Azure name",
+	)
+	createFlags.UserName = cmd.String(
+		[]string{"-azure-username"},
+		"tcuser",
+		"Azure username",
+	)
+	createFlags.UserPassword = cmd.String(
+		[]string{"-azure-password"},
+		"",
+		"Azure user password",
+	)
+	createFlags.Image = cmd.String(
+		[]string{"-azure-image"},
+		"b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04-LTS-amd64-server-20140724-en-us-30GB",
+		"Azure image name",
+	)
+	createFlags.SshPort = cmd.String(
+		[]string{"-azure-ssh"},
+		"22",
+		"Azure ssh port",
+	)
+	createFlags.DockerCertDir = cmd.String(
+		[]string{"-azure-docker-cert-dir"},
+		".docker",
+		"Azure docker cert directory",
+	)
+	createFlags.DockerPort = cmd.String(
+		[]string{"-azure-docker-port"},
+		"4243",
+		"Azure docker port",
+	)
+	return createFlags
+}
+
+func NewDriver(storePath string) (drivers.Driver, error) {
+	driver := &Driver{storePath: storePath}
+	return driver, nil
+}
+
+func (d *Driver) DriverName() string {
+	return "azure"
+}
+
+func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
+	flags := flagsInterface.(*CreateFlags)
+	driver.SubscriptionID = *flags.SubscriptionID
+	driver.SubscriptionCert = *flags.SubscriptionCert
+	driver.PublishSettingsFilePath = *flags.PublishSettingsFilePath
+	
+	if (len(driver.SubscriptionID) == 0 || len(driver.SubscriptionCert) == 0) && len(driver.PublishSettingsFilePath) == 0 {
+		return fmt.Errorf("Please specify azure subscription params using options: --azure-subscription-id and --azure-subscription-cert or --azure-publish-settings-file")
+	}
+	
+	driver.Name = *flags.Name
+	driver.Location = *flags.Location
+	
+	if *flags.Size != "ExtraSmall" && *flags.Size != "Small" && *flags.Size != "Medium" &&
+		*flags.Size != "Large" && *flags.Size != "ExtraLarge" &&
+		*flags.Size != "A5" && *flags.Size != "A6" && *flags.Size != "A7" {
+		return fmt.Errorf("Invalid VM size specified with --azure-size. Allowed values are 'ExtraSmall,Small,Medium,Large,ExtraLarge,A5,A6,A7.")
+	}
+	
+	driver.Size = *flags.Size
+	driver.UserName = *flags.UserName
+	driver.UserPassword = *flags.UserPassword
+	driver.Image = *flags.Image
+	driver.DockerCertDir = *flags.DockerCertDir
+	
+	dockerPort, err := strconv.Atoi(*flags.DockerPort)
+	if err != nil {
+		return err
+	}
+	driver.DockerPort = dockerPort
+	
+	sshPort, err := strconv.Atoi(*flags.SshPort)
+	if err != nil {
+		return err
+	}
+	driver.SshPort = sshPort
+	
+	return nil
+}
+
+func (driver *Driver) Create() error {
+	err := createAzureVM(driver)
+	return err
+}
+
+func (driver *Driver) GetURL() (string, error) {
+	url := fmt.Sprintf("tcp://%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
+	return url, nil
+}
+
+func (driver *Driver) GetIP() (string, error) {
+	return "dummy IP", nil
+}
+
+func (driver *Driver) GetState() (state.State, error) {
+	err := driver.setUserSubscription()
+	if err != nil {
+		return state.None, err
+	}
+	
+	dockerVM, err := vmClient.GetVMDeployment(driver.Name, driver.Name)
+	if err != nil {
+		return state.None, err
+	}
+	
+	switch dockerVM.Status {
+		case "Running":
+			return state.Running, nil
+		case "Starting":
+			return state.Starting, nil
+		case "Suspended":
+			return state.Stopped, nil
+	}
+	
+	return state.None, nil
+}
+
+func (driver *Driver) Start() error {
+	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	
+	err = vmClient.StartRole(driver.Name, driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	err = driver.waitForDocker()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (driver *Driver) Stop() error {
+	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	err = vmClient.ShutdownRole(driver.Name, driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (driver *Driver) Remove() error {
+	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	err = vmClient.DeleteVMDeployment(driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	err = vmClient.DeleteHostedService(driver.Name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (driver *Driver) Restart() error {
+	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	
+	err = vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	err = driver.waitForDocker()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (driver *Driver) Kill() error {
+	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	err = vmClient.ShutdownRole(driver.Name, driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (driver *Driver) GetSSHCommand(args ...string) *exec.Cmd {
+	return ssh.GetSSHCommand(driver.Name+".cloudapp.net", driver.SshPort, driver.UserName, driver.sshKeyPath(), args...)
+}
+
+//Region public methods ends
+
+
+//Region private methods starts
+
+func createAzureVM(driver *Driver) error {
+	
+	err := driver.setVMNameIfNotSet()
+	if err != nil {
+		return err
+	}
+	
+	err = driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	
+	vmConfig, err := vmClient.CreateAzureVMConfiguration(driver.Name, driver.Size, driver.Image, driver.Location)
+	if err != nil {
+		return err
+	}
+
+	err = driver.generateCertForAzure()
+	if err != nil {
+		return err
+	}
+		
+	vmConfig, err = vmClient.AddAzureLinuxProvisioningConfig(vmConfig, driver.UserName, driver.UserPassword, driver.azureCertPath())
+	if err != nil {
+		return err
+	}
+	
+	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerCertDir, driver.DockerPort, "0.3")
+	if err != nil {
+		return err
+	}
+	
+	err = vmClient.CreateAzureVM(vmConfig, driver.Name, driver.Location)
+	if err != nil {
+		return err
+	}
+	
+	err = driver.waitForDocker()
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+func (driver *Driver) setVMNameIfNotSet() error {
+	if driver.Name != "" {
+		return nil
+	}
+	
+	randomId, err := newUUID()
+	if err != nil {
+		return err
+	}
+	
+	driver.Name = fmt.Sprintf("docker-host-%s", randomId)
+	return nil
+}
+
+// newUUID generates a random UUID according to RFC 4122
+func newUUID() (string, error) {
+	uuid := make([]byte, 16)
+	n, err := io.ReadFull(rand.Reader, uuid)
+	if n != len(uuid) || err != nil {
+		return "", err
+	}
+	uuid[8] = uuid[8]&^0xc0 | 0x80
+	uuid[6] = uuid[6]&^0xf0 | 0x40
+
+	return fmt.Sprintf("%x", uuid[10:]), nil
+}
+
+func (driver *Driver) setUserSubscription() error {
+	if len(driver.PublishSettingsFilePath) != 0 {
+		err := azure.ImportPublishSettingsFile(driver.PublishSettingsFilePath)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	err := azure.ImportPublishSettings(driver.SubscriptionID, driver.SubscriptionCert)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (driver *Driver) waitForDocker() error {
+	fmt.Println("Waiting for docker daemon on remote machine to be available.")
+	maxRepeats := 24
+	url := fmt.Sprintf("http://%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
+	success := waitForDockerEndpoint(url, maxRepeats)
+	if !success {
+		fmt.Println("Restarting docker daemon on remote machine.")
+		err := vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
+		if err != nil {
+			return err
+		}
+		success = waitForDockerEndpoint(url, maxRepeats)
+		if !success {
+			fmt.Println("Error: Can not run docker daemon on remote machine. Please check docker daemon at " + url)
+		}
+	}
+	fmt.Println()
+	fmt.Println("Docker daemon is ready.")
+	return nil
+}
+
+func waitForDockerEndpoint(url string, maxRepeats int) bool {
+	counter := 0
+	for {
+		resp, err := http.Get(url)
+		error := err.Error()
+		if strings.Contains(error, "malformed HTTP response") || len(error) == 0 {
+			break
+		}
+		fmt.Print(".")
+		if resp != nil {
+			fmt.Println(resp)
+		}
+		time.Sleep(10 * time.Second)
+		counter++
+		if counter == maxRepeats {
+			return false
+		}
+	}
+	return true
+}
+
+func (driver *Driver) generateCertForAzure() error {
+	if err := ssh.GenerateSSHKey(driver.sshKeyPath()); err != nil {
+		return err
+	}
+	
+	cmd := exec.Command("openssl", "req", "-x509", "-key", driver.sshKeyPath(), "-nodes", "-days", "365", "-newkey", "rsa:2048", "-out", driver.azureCertPath(), "-subj", "/C=AU/ST=Some-State/O=InternetWidgitsPtyLtd/CN=\\*")
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+func (driver *Driver) sshKeyPath() string {
+	return path.Join(driver.storePath, "id_rsa")
+}
+
+func (driver *Driver) publicSSHKeyPath() string {
+	return driver.sshKeyPath() + ".pub"
+}
+
+func (driver *Driver) azureCertPath() string {
+	return path.Join(driver.storePath, "azure_cert.pem")
+}
+
+//Region private methods ends
