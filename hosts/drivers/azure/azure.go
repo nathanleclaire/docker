@@ -187,7 +187,17 @@ func (driver *Driver) GetURL() (string, error) {
 }
 
 func (driver *Driver) GetIP() (string, error) {
-	return "dummy IP", nil
+	err := driver.setUserSubscription()
+	if err != nil {
+		return "", err
+	}
+	dockerVM, err := vmClient.GetVMDeployment(driver.Name, driver.Name)
+	if err != nil {
+		return "", err
+	}
+	vip := dockerVM.RoleList.Role[0].ConfigurationSets.ConfigurationSet[0].InputEndpoints.InputEndpoint[0].Vip
+	
+	return vip, nil
 }
 
 func (driver *Driver) GetState() (state.State, error) {
@@ -201,12 +211,13 @@ func (driver *Driver) GetState() (state.State, error) {
 		return state.None, err
 	}
 	
-	switch dockerVM.Status {
-		case "Running":
+	vmState := dockerVM.RoleInstanceList.RoleInstance[0].PowerState
+	switch vmState {
+		case "Started":
 			return state.Running, nil
 		case "Starting":
 			return state.Starting, nil
-		case "Suspended":
+		case "Stopped":
 			return state.Stopped, nil
 	}
 	
@@ -217,6 +228,15 @@ func (driver *Driver) Start() error {
 	err := driver.setUserSubscription()
 	if err != nil {
 		return err
+	}
+	
+	vmState, err := driver.GetState()
+	if err != nil {
+		return err
+	}
+	if vmState == state.Running || vmState == state.Starting {
+		fmt.Println("Azure host is already running or starting.")
+		return nil
 	}
 	
 	err = vmClient.StartRole(driver.Name, driver.Name, driver.Name)
@@ -234,6 +254,14 @@ func (driver *Driver) Stop() error {
 	err := driver.setUserSubscription()
 	if err != nil {
 		return err
+	}
+	vmState, err := driver.GetState()
+	if err != nil {
+		return err
+	}
+	if vmState == state.Stopped {
+		fmt.Println("Azure host is already stopped.")
+		return nil
 	}
 	err = vmClient.ShutdownRole(driver.Name, driver.Name, driver.Name)
 	if err != nil {
@@ -263,7 +291,14 @@ func (driver *Driver) Restart() error {
 	if err != nil {
 		return err
 	}
-	
+	vmState, err := driver.GetState()
+	if err != nil {
+		return err
+	}
+	if vmState == state.Stopped {
+		fmt.Println("Azure host is already stopped, use start command to run it.")
+		return nil
+	}
 	err = vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
 	if err != nil {
 		return err
@@ -279,6 +314,14 @@ func (driver *Driver) Kill() error {
 	err := driver.setUserSubscription()
 	if err != nil {
 		return err
+	}
+	vmState, err := driver.GetState()
+	if err != nil {
+		return err
+	}
+	if vmState == state.Stopped {
+		fmt.Println("Azure host is already stopped.")
+		return nil
 	}
 	err = vmClient.ShutdownRole(driver.Name, driver.Name, driver.Name)
 	if err != nil {
