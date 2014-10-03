@@ -193,6 +193,9 @@ func (driver *Driver) GetIP() (string, error) {
 	}
 	dockerVM, err := vmClient.GetVMDeployment(driver.Name, driver.Name)
 	if err != nil {
+		if strings.Contains(err.Error(), "Code: ResourceNotFound") {
+			return "", fmt.Errorf("Azure host was not found. Please check your Azure subscription.")
+		}
 		return "", err
 	}
 	vip := dockerVM.RoleList.Role[0].ConfigurationSets.ConfigurationSet[0].InputEndpoints.InputEndpoint[0].Vip
@@ -208,6 +211,10 @@ func (driver *Driver) GetState() (state.State, error) {
 	
 	dockerVM, err := vmClient.GetVMDeployment(driver.Name, driver.Name)
 	if err != nil {
+		if strings.Contains(err.Error(), "Code: ResourceNotFound") {
+			return state.None, fmt.Errorf("Azure host was not found. Please check your Azure subscription.")
+		}
+		
 		return state.None, err
 	}
 	
@@ -272,6 +279,10 @@ func (driver *Driver) Stop() error {
 
 func (driver *Driver) Remove() error {
 	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+	_, err = driver.GetState()
 	if err != nil {
 		return err
 	}
