@@ -1,7 +1,6 @@
 package azure
 
 import (
-	"crypto/rand"
 	"fmt"
 	"net/http"
 	"os/exec"
