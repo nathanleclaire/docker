@@ -13,10 +13,12 @@ import (
 
 	azure "github.com/MSOpenTech/azure-sdk-for-go"
 	"github.com/MSOpenTech/azure-sdk-for-go/clients/vmClient"
+
 	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
 	flag "github.com/docker/docker/pkg/mflag"
+	"github.com/docker/docker/utils"
 )
 
 type Driver struct {
@@ -399,26 +401,10 @@ func (driver *Driver) setVMNameIfNotSet() error {
 		return nil
 	}
 
-	randomId, err := newUUID()
-	if err != nil {
-		return err
-	}
+	randomId := utils.TruncateID(utils.GenerateRandomID())
 
 	driver.Name = fmt.Sprintf("docker-host-%s", randomId)
 	return nil
-}
-
-// newUUID generates a random UUID according to RFC 4122
-func newUUID() (string, error) {
-	uuid := make([]byte, 16)
-	n, err := io.ReadFull(rand.Reader, uuid)
-	if n != len(uuid) || err != nil {
-		return "", err
-	}
-	uuid[8] = uuid[8]&^0xc0 | 0x80
-	uuid[6] = uuid[6]&^0xf0 | 0x40
-
-	return fmt.Sprintf("%x", uuid[10:]), nil
 }
 
 func (driver *Driver) setUserSubscription() error {
