@@ -39,48 +39,42 @@ func main() {
 		os.Setenv("DEBUG", "1")
 	}
 
-	store := hosts.NewStore()
+	if *flDaemon {
 
-	defaultHost := ""
-
-	if len(flHosts) == 0 {
-		// If the client, attempt to get active host
-		if !*flDaemon {
-			host, err := store.GetActive()
+		if len(flHosts) == 0 {
+			defaultHost := os.Getenv("DOCKER_HOST")
+			if defaultHost == "" || *flDaemon {
+				// If we do not have a host, default to unix socket
+				defaultHost = fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET)
+			}
+			defaultHost, err := api.ValidateHostURL(defaultHost)
 			if err != nil {
 				log.Fatal(err)
 			}
-			if host != nil {
-				defaultHost, err = host.Driver.GetURL()
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
+			flHosts = append(flHosts, defaultHost)
 		}
 
-		// Read the DOCKER_HOST environment variable if there is no active host
-		if defaultHost == "" {
-			defaultHost = os.Getenv("DOCKER_HOST")
-		}
-
-		if defaultHost == "" || *flDaemon {
-			// If we do not have a host, default to unix socket
-			defaultHost = fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET)
-		}
-		defaultHost, err := api.ValidateHostURL(defaultHost)
-		if err != nil {
-			log.Fatal(err)
-		}
-		flHosts = append(flHosts, defaultHost)
-	}
-
-	if *flDaemon {
 		mainDaemon()
 		return
 	}
 
 	if len(flHosts) > 1 {
 		log.Fatal("Please specify only one -H")
+	}
+
+	store := hosts.NewStore()
+
+	// Select active host if no host has been specified
+	if len(flHosts) == 0 {
+		host, err := store.GetActive()
+		if err != nil {
+			log.Fatal(err)
+		}
+		url, err := host.Driver.GetURL()
+		if err != nil {
+			log.Fatal(err)
+		}
+		flHosts = append(flHosts, url)
 	}
 
 	hostURL := flHosts[0]

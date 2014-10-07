@@ -100,10 +100,12 @@ func (d *Driver) Create() error {
 	if d.Boot2DockerURL != "" {
 		isoURL = d.Boot2DockerURL
 	} else {
-		isoURL, err = getLatestReleaseURL()
-		if err != nil {
-			return err
-		}
+		// HACK: Docker 1.3 boot2docker image
+		isoURL = "http://cl.ly/1c1c0O3N193A/download/boot2docker-1.2.0-dev.iso"
+		// isoURL, err = getLatestReleaseURL()
+		// if err != nil {
+		// 	return err
+		// }
 	}
 	log.Infof("Downloading boot2docker...")
 	if err := downloadISO(d.storePath, "boot2docker.iso", isoURL); err != nil {

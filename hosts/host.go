@@ -40,7 +40,17 @@ func NewHost(name, driverName, storePath string) (*Host, error) {
 	}, nil
 }
 
+func NewDefaultHost() *Host {
+	host := &Host{Name: "default"}
+	host.Driver = &drivers.DefaultDriver{}
+	return host
+}
+
 func LoadHost(name string, storePath string) (*Host, error) {
+	if name == "default" {
+		return NewDefaultHost(), nil
+	}
+
 	if _, err := os.Stat(storePath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("Host %q does not exist", name)
 	}
