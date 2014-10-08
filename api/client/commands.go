@@ -2696,7 +2696,7 @@ func (cli *DockerCli) CmdGroupsRm(args ...string) error {
 }
 
 func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
-	cmd := cli.Subcmd("groups create ", "NAME", "Create a new group")
+	cmd := cli.Subcmd("groups create", "NAME", "Create a new group with the specified name (or pass '-' to read group JSON from stdin)")
 
 	if err := cmd.Parse(args); err != nil {
 		return err
@@ -2707,9 +2707,18 @@ func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
 		return nil
 	}
 
-	group := &api.Group{
-		Name:       cmd.Arg(0),
-		Containers: []*api.Container{},
+	var group *api.Group
+
+	if cmd.Arg(0) == "-" {
+		group = &api.Group{}
+		if err := json.NewDecoder(cli.in).Decode(group); err != nil {
+			return err
+		}
+	} else {
+		group = &api.Group{
+			Name:       cmd.Arg(0),
+			Containers: []*api.Container{},
+		}
 	}
 
 	if _, _, err := cli.call("POST", "/groups/create", group, true); err != nil {
@@ -2720,6 +2729,13 @@ func (cli *DockerCli) CmdGroupsCreate(args ...string) error {
 }
 
 func (cli *DockerCli) CmdUp(args ...string) error {
+	cmd := cli.Subcmd("up", "", "Create/update a group from a group.yml")
+	parse := cmd.Bool([]string{"#parse", "-parse"}, false, "Just parse group.yml and write JSON to stdout")
+
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
 	raw, err := loadGroupConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -2733,6 +2749,10 @@ func (cli *DockerCli) CmdUp(args ...string) error {
 	group, err := cli.transformGroupConfig(raw)
 	if err != nil {
 		return err
+	}
+
+	if *parse {
+		return json.NewEncoder(cli.out).Encode(group)
 	}
 
 	if _, _, err := cli.call("POST", "/groups/create", group, true); err != nil {
