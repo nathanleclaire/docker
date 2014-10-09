@@ -547,6 +547,21 @@ For example:
 
     $ sudo docker export red_panda > latest.tar
 
+## groups
+
+    Usage: docker groups [SUBCOMMAND]
+
+Provides a variety of subcommands for managing and interacting with container groups.  To specify properties of the group in detail use the [docker up](#up) command.
+
+The subcommands are:
+
+- `create` - create a container group
+- `list` - show all the groups.  `docker groups` without a subcommand specified will run this subcommand.
+- `rm` - remove a group and all of its containers.
+- `start` - start all of the containers in the group
+- `stop` - stop all of the containers in the group
+- `containers` - list all containers in a group
+
 ## history
 
     Usage: docker history [OPTIONS] IMAGE
@@ -1460,6 +1475,16 @@ processes in a container.
 See the [cgroups freezer documentation]
 (https://www.kernel.org/doc/Documentation/cgroups/freezer-subsystem.txt) for
 further details.
+
+## up
+
+    Usage: docker up [OPTIONS]
+
+    Create/update a group from a group.yml file
+
+`docker up` will read a configuration file, `group.yml`, which defines a group of containers and their runtime properties, and create or modify a [docker group](#groups) based on the defined properties.
+
+See the [group.yml reference](/reference/group) for further details.
 
 ## version
 
