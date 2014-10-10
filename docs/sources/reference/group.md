@@ -32,8 +32,6 @@ Here is an example:
           - .:/code
         ports:
           - "8000"
-        links:
-          - db
 
 Container runtime keys loosely correspond to options passed to `docker run`
 as flags.

@@ -551,16 +551,29 @@ For example:
 
     Usage: docker groups [SUBCOMMAND]
 
-Provides a variety of subcommands for managing and interacting with container groups.  To specify properties of the group in detail use the [docker up](#up) command.
+Provides a variety of subcommands for managing and interacting with container
+groups.  To specify properties of the group in detail use the [docker up](#up)
+command.
 
 The subcommands are:
 
 - `create` - create a container group
-- `list` - show all the groups.  `docker groups` without a subcommand specified will run this subcommand.
+- `list` - show all the groups.  `docker groups` without a subcommand
+  specified will run this subcommand.
 - `rm` - remove a group and all of its containers.
 - `start` - start all of the containers in the group
 - `stop` - stop all of the containers in the group
 - `containers` - list all containers in a group
+
+Each container in the group automatically gets an `/etc/hosts` entry that allows
+you to access the other containers in the group using DNS.  This entry
+corresponds directly to the container name.  Therefore, you don't have to
+use the [links](/userguide/dockerlinks/) feature.
+
+For instance, if you have a container in your group running the
+[redis](https://registry.hub.docker.com/_/redis) image, which exposes port
+`6379` by default, and this container is named `db`, you can directly connect
+to that container from the others in the group using the DNS entry `db`.
 
 ## history
 
