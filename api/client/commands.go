@@ -26,6 +26,7 @@ import (
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/graph"
 	"github.com/docker/docker/hosts"
 	"github.com/docker/docker/hosts/drivers"
 	_ "github.com/docker/docker/hosts/drivers/azure"
@@ -2664,8 +2665,6 @@ func (cli *DockerCli) CmdHostsCreate(args ...string) error {
 	)
 
 	driver := cmd.String([]string{"d", "-driver"}, "none", driverDesc)
-
-	createFlags := drivers.RegisterCreateFlags(cmd)
 
 	createFlags := drivers.RegisterCreateFlags(cmd)
 
