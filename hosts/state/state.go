@@ -10,6 +10,7 @@ const (
 	Saved
 	Stopped
 	Starting
+	Error
 )
 
 var states = []string{
@@ -19,6 +20,7 @@ var states = []string{
 	"Saved",
 	"Stopped",
 	"Starting",
+	"Error",
 }
 
 func (s State) String() string {
