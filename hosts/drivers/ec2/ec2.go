@@ -45,7 +45,7 @@ func init() {
 const DEFAULT_REGION string = "us-west-1"
 
 // "Ubuntu 14.04 LTS with Docker and Runit"
-const DEFAULT_IMAGE_ID string = "ami-028c2b6a"
+const DEFAULT_IMAGE_ID string = "ami-014f4144"
 const DEFAULT_INSTANCE_TYPE string = "t1.micro"
 
 // RegisterCreateFlags registers the flags this driver adds to
@@ -137,12 +137,14 @@ func (d *Driver) Create() error {
 }
 
 func (d *Driver) runInstance() (Instance, error) {
-	fmt.Println("RUNNING INSTANCE!!!")
 	instance := Instance{}
 	v := url.Values{}
 	v.Set("Action", "RunInstances")
 	v.Set("ImageId", d.ImageId)
+	v.Set("Version", "2014-06-15")
 	v.Set("Placement.AvailabilityZone", d.Region+"a")
+	v.Set("MinCount", "1")
+	v.Set("MaxCount", "1")
 	client := &http.Client{}
 	finalEndpoint := fmt.Sprintf("%s?%s", d.endpoint, v.Encode())
 	req, err := http.NewRequest("GET", finalEndpoint, nil)
