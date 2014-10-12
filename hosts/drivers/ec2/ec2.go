@@ -41,7 +41,7 @@ type CreateFlags struct {
 }
 
 type Instance struct {
-	info interface{}
+	info aws.Ec2Instance
 }
 
 func init() {
