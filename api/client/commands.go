@@ -2056,8 +2056,6 @@ func (cid *cidFile) Close() error {
 		}
 	}
 
-	w.Flush()
-
 	return nil
 }
 
