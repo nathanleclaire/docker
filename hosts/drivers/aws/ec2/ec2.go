@@ -147,13 +147,6 @@ func (d *Driver) GetIP() (string, error) {
 	return "", nil
 }
 
-func (d *Driver) GetState() (state.State, error) {
-	v := url.Values{}
-	v.Set("Action", "DescribeInstances")
-	v.Set("InstanceId.1", d.InstanceName)
-	return state.Stopped, nil
-}
-
 func (d *Driver) Create() error {
 	d.setInstanceNameIfNotSet()
 	log.Infof("Creating AWS EC2 instance...")
@@ -225,39 +218,71 @@ func (d *Driver) runInstance() (Instance, error) {
 	return instance, nil
 }
 
-func (d *Driver) performStandardAction(action string) error {
-	log.Infof("Removing AWS EC2 instance...")
+func (d *Driver) performStandardAction(action string) (http.Response, error) {
+	log.Infof("Running action %s on AWS EC2 instance...", action)
 	v := url.Values{}
 	v.Set("Action", action)
 	v.Set("InstanceId.1", d.InstanceId)
 	resp, err := d.makeAwsApiCall(v)
 	if err != nil {
-		return NewApiCallError(err)
+		return resp, NewApiCallError(err)
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
+
+func (d *Driver) GetState() (state.State, error) {
+	if resp, err := d.performStandardAction("DescribeInstances"); err != nil {
+		defer resp.Body.Close()
+
+		// unmarshal the xml response...
+		contents, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return state.Error, fmt.Errorf("Error reading AWS response body: %s", err)
+		}
+		fmt.Println(string(contents))
+
+		return state.Stopped, nil
+	}
+	return state.Error, nil
+}
+
+// TODO: Do something useful with the following API responses
+//       which are currently just getting discarded?
+func (d *Driver) Remove() error {
+	if _, err := d.performStandardAction("TerminateInstances"); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (d *Driver) Remove() error {
-	return d.performStandardAction("TerminateInstances")
-}
-
 func (d *Driver) Start() error {
-	return d.performStandardAction("StartInstances")
+	if _, err := d.performStandardAction("StartInstances"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *Driver) Stop() error {
-	return d.performStandardAction("StopInstances")
+	if _, err := d.performStandardAction("StopInstances"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *Driver) Restart() error {
-	return d.performStandardAction("RebootInstances")
+	if _, err := d.performStandardAction("RebootInstances"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *Driver) Kill() error {
 	// Not really anything like a hard power-off / kill
 	// in the AWS API that I can find.  Perhaps I am wrong!
-	return d.performStandardAction("StopInstances")
+	if _, err := d.performStandardAction("StopInstances"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (d *Driver) sshKeyPath() string {
