@@ -5,6 +5,7 @@ type State int
 
 const (
 	None State = iota
+	Error
 	Running
 	Paused
 	Saved
@@ -14,6 +15,7 @@ const (
 
 var states = []string{
 	"",
+	"Error",
 	"Running",
 	"Paused",
 	"Saved",
