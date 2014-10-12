@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"net/url"
 	"os/exec"
+	"path"
 
 	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/drivers/ec2/aws"
+	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
+	"github.com/docker/docker/pkg/log"
 	flag "github.com/docker/docker/pkg/mflag"
 	awsauth "github.com/smartystreets/go-aws-auth"
 )
@@ -20,9 +23,13 @@ type Driver struct {
 	endpoint     string
 	AccessKey    string
 	ImageId      string
+	InstanceId   string
 	InstanceType string
+	IPAddress    string
 	Region       string
 	SecretKey    string
+	Username     string
+	storePath    string
 }
 
 type CreateFlags struct {
@@ -34,7 +41,7 @@ type CreateFlags struct {
 }
 
 type Instance struct {
-	info string
+	info interface{}
 }
 
 func init() {
@@ -83,7 +90,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 }
 
 func NewDriver(storePath string) (drivers.Driver, error) {
-	return &Driver{}, nil
+	return &Driver{storePath: storePath}, nil
 }
 
 func (d *Driver) DriverName() string {
@@ -130,6 +137,7 @@ func (d *Driver) GetState() (state.State, error) {
 }
 
 func (d *Driver) Create() error {
+	log.Infof("Creating AWS EC2 instance...")
 	instance, err := d.runInstance()
 	if err != nil {
 		return fmt.Errorf("Error running the EC2 instance: %s", err)
@@ -170,13 +178,13 @@ func (d *Driver) runInstance() (Instance, error) {
 	if resp.StatusCode != http.StatusOK {
 		return Instance{}, fmt.Errorf("Non-200 API Response : \n%s")
 	}
-	instance.info = string(contents)
 	unmarshalledResponse := aws.RunInstancesResponse{}
 	err = xml.Unmarshal(contents, &unmarshalledResponse)
 	if err != nil {
 		return Instance{}, fmt.Errorf("Error unmarshalling AWS response XML: %s")
 	}
 
+	instance.info = unmarshalledResponse.Instances[0]
 	return instance, nil
 }
 
@@ -203,6 +211,10 @@ func (d *Driver) Kill() error {
 
 }
 
+func (d *Driver) sshKeyPath() string {
+	return path.Join(d.storePath, "id_rsa")
+}
+
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return &exec.Cmd{}
+	return ssh.GetSSHCommand(d.IPAddress, 22, d.Username, d.sshKeyPath(), args...)
 }
