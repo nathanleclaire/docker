@@ -56,6 +56,7 @@ const DEFAULT_REGION string = "us-west-1"
 // "Ubuntu 14.04 LTS with Docker and Runit"
 const DEFAULT_IMAGE_ID string = "ami-014f4144"
 const DEFAULT_INSTANCE_TYPE string = "t1.micro"
+const DEFAULT_SSH_USERNAME string = "ubuntu"
 
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
@@ -85,6 +86,11 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		[]string{"-aws-instance-type"},
 		DEFAULT_INSTANCE_TYPE,
 		"Type of instance to create",
+	)
+	createFlags.InstanceType = cmd.String(
+		[]string{"-aws-instance-username"},
+		DEFAULT_SSH_USERNAME,
+		"Username for SSH on the instance (depends on AMI)",
 	)
 	return createFlags
 }
