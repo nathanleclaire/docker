@@ -225,10 +225,10 @@ func (d *Driver) runInstance() (Instance, error) {
 	return instance, nil
 }
 
-func (d *Driver) Remove() error {
+func (d *Driver) performStandardAction(action string) error {
 	log.Infof("Removing AWS EC2 instance...")
 	v := url.Values{}
-	v.Set("Action", "TerminateInstances")
+	v.Set("Action", action)
 	v.Set("InstanceId.1", d.InstanceId)
 	resp, err := d.makeAwsApiCall(v)
 	if err != nil {
@@ -238,23 +238,26 @@ func (d *Driver) Remove() error {
 	return nil
 }
 
+func (d *Driver) Remove() error {
+	return d.performStandardAction("TerminateInstances")
+}
+
 func (d *Driver) Start() error {
-	return nil
+	return d.performStandardAction("StartInstances")
 }
 
 func (d *Driver) Stop() error {
-	return nil
-
+	return d.performStandardAction("StopInstances")
 }
 
 func (d *Driver) Restart() error {
-	return nil
-
+	return d.performStandardAction("RebootInstances")
 }
 
 func (d *Driver) Kill() error {
-	return nil
-
+	// Not really anything like a hard power-off / kill
+	// in the AWS API that I can find.  Perhaps I am wrong!
+	return d.performStandardAction("StopInstances")
 }
 
 func (d *Driver) sshKeyPath() string {
