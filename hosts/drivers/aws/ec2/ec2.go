@@ -219,7 +219,6 @@ func (d *Driver) runInstance() (Instance, error) {
 }
 
 func (d *Driver) performStandardAction(action string) (http.Response, error) {
-	log.Infof("Running action %s on AWS EC2 instance...", action)
 	v := url.Values{}
 	v.Set("Action", action)
 	v.Set("InstanceId.1", d.InstanceId)
@@ -231,19 +230,18 @@ func (d *Driver) performStandardAction(action string) (http.Response, error) {
 }
 
 func (d *Driver) GetState() (state.State, error) {
-	if resp, err := d.performStandardAction("DescribeInstances"); err != nil {
-		defer resp.Body.Close()
-
-		// unmarshal the xml response...
-		contents, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return state.Error, fmt.Errorf("Error reading AWS response body: %s", err)
-		}
-		fmt.Println(string(contents))
-
-		return state.Stopped, nil
+	resp, err := d.performStandardAction("DescribeInstances")
+	if err != nil {
+		return state.Error, err
 	}
-	return state.Error, nil
+	defer resp.Body.Close()
+	// unmarshal the xml response...
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return state.Error, fmt.Errorf("Error reading AWS response body: %s", err)
+	}
+	fmt.Println(string(contents))
+	return state.Stopped, nil
 }
 
 // TODO: Do something useful with the following API responses
