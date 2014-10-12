@@ -28,10 +28,10 @@ import (
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/hosts"
 	"github.com/docker/docker/hosts/drivers"
+	_ "github.com/docker/docker/hosts/drivers/azure"
 	_ "github.com/docker/docker/hosts/drivers/digitalocean"
 	_ "github.com/docker/docker/hosts/drivers/none"
 	_ "github.com/docker/docker/hosts/drivers/virtualbox"
-	_ "github.com/docker/docker/hosts/drivers/azure"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/log"
@@ -2682,9 +2682,18 @@ func (cli *DockerCli) CmdHostsRm(args ...string) error {
 		return nil
 	}
 
+	rmErr := ""
 	store := hosts.NewStore()
-
-	return store.Remove(cmd.Arg(0))
+	for _, host := range cmd.Args() {
+		host := host
+		if err := store.Remove(host); err != nil {
+			rmErr = fmt.Sprintf("%sError attempting to remove host %s: %s\n", rmErr, host, err)
+		}
+	}
+	if rmErr != "" {
+		return fmt.Errorf(rmErr)
+	}
+	return nil
 }
 
 func (cli *DockerCli) CmdHostsIp(args ...string) error {
