@@ -152,20 +152,13 @@ func (d *Driver) Create() error {
 	return nil
 }
 
-func (d *Driver) runInstance() (Instance, error) {
-	instance := Instance{}
-	v := url.Values{}
-	v.Set("Action", "RunInstances")
-	v.Set("ImageId", d.ImageId)
+func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 	v.Set("Version", "2014-06-15")
-	v.Set("Placement.AvailabilityZone", d.Region+"a")
-	v.Set("MinCount", "1")
-	v.Set("MaxCount", "1")
 	client := &http.Client{}
 	finalEndpoint := fmt.Sprintf("%s?%s", d.endpoint, v.Encode())
 	req, err := http.NewRequest("GET", finalEndpoint, nil)
 	if err != nil {
-		return Instance{}, fmt.Errorf("Error creating request from client")
+		return http.Response{}, fmt.Errorf("Error creating request from client")
 	}
 	req.Header.Add("Content-type", "application/json")
 	awsauth.Sign(req, awsauth.Credentials{
@@ -173,21 +166,33 @@ func (d *Driver) runInstance() (Instance, error) {
 		SecretAccessKey: d.SecretKey,
 	})
 	resp, err := client.Do(req)
+	if resp.StatusCode != http.StatusOK {
+		return http.Response{}, fmt.Errorf("Non-200 API Response : \n%s", resp.StatusCode)
+	}
+	return *resp, nil
+}
+
+func (d *Driver) runInstance() (Instance, error) {
+	instance := Instance{}
+	v := url.Values{}
+	v.Set("Action", "RunInstances")
+	v.Set("ImageId", d.ImageId)
+	v.Set("Placement.AvailabilityZone", d.Region+"a")
+	v.Set("MinCount", "1")
+	v.Set("MaxCount", "1")
+	resp, err := d.makeAwsApiCall(v)
 	defer resp.Body.Close()
 	if err != nil {
-		return Instance{}, fmt.Errorf("Problem with HTTPS request to %s", finalEndpoint)
+		return instance, fmt.Errorf("Problem with AWS API call: %s", err)
 	}
 	contents, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return Instance{}, fmt.Errorf("Error reading AWS response body")
-	}
-	if resp.StatusCode != http.StatusOK {
-		return Instance{}, fmt.Errorf("Non-200 API Response : \n%s")
+		return instance, fmt.Errorf("Error reading AWS response body")
 	}
 	unmarshalledResponse := aws.RunInstancesResponse{}
 	err = xml.Unmarshal(contents, &unmarshalledResponse)
 	if err != nil {
-		return Instance{}, fmt.Errorf("Error unmarshalling AWS response XML: %s")
+		return instance, fmt.Errorf("Error unmarshalling AWS response XML: %s")
 	}
 
 	instance.info = unmarshalledResponse.Instances[0]
