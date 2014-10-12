@@ -148,7 +148,7 @@ func (d *Driver) Create() error {
 	if err != nil {
 		return fmt.Errorf("Error running the EC2 instance: %s", err)
 	}
-	fmt.Println(instance)
+	d.InstanceId = instance.info.InstanceId
 	return nil
 }
 
