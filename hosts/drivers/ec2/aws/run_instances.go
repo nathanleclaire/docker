@@ -23,7 +23,6 @@ type RunInstancesResponse struct {
 			GroupName        string `xml:"groupName"`
 			Tenancy          string `xml:"tenancy"`
 		} `xml:"placement"`
-		Placement  string `xml:"placement"`
 		KernelId   string `xml:"kernelId"`
 		Monitoring struct {
 			State string `xml:"state"`

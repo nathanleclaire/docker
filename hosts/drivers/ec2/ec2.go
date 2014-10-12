@@ -1,20 +1,22 @@
 package ec2
 
 import (
+	"encoding/xml"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os/exec"
 
 	"github.com/docker/docker/hosts/drivers"
+	"github.com/docker/docker/hosts/drivers/ec2/aws"
 	"github.com/docker/docker/hosts/state"
 	flag "github.com/docker/docker/pkg/mflag"
 	awsauth "github.com/smartystreets/go-aws-auth"
 )
 
 type Driver struct {
-	auth         Auth
+	auth         aws.Auth
 	endpoint     string
 	AccessKey    string
 	ImageId      string
@@ -32,7 +34,7 @@ type CreateFlags struct {
 }
 
 type Instance struct {
-	info io.ReadCloser
+	info string
 }
 
 func init() {
@@ -103,7 +105,7 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 
 	if d.AccessKey == "" || d.SecretKey == "" {
 		var err error
-		d.auth, err = EnvAuth()
+		d.auth, err = aws.EnvAuth()
 		if err != nil {
 			return fmt.Errorf("Setting the AWS_ACCESS_TOKEN and AWS_SECRET_KEY environment variables or the --aws-access-token and --aws-secret-key flags")
 		}
@@ -157,10 +159,23 @@ func (d *Driver) runInstance() (Instance, error) {
 		SecretAccessKey: d.SecretKey,
 	})
 	resp, err := client.Do(req)
+	defer resp.Body.Close()
 	if err != nil {
 		return Instance{}, fmt.Errorf("Problem with HTTPS request to %s", finalEndpoint)
 	}
-	instance.info = resp.Body
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return Instance{}, fmt.Errorf("Error reading AWS response body")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return Instance{}, fmt.Errorf("Non-200 API Response : \n%s")
+	}
+	instance.info = string(contents)
+	unmarshalledResponse := aws.RunInstancesResponse{}
+	err = xml.Unmarshal(contents, &unmarshalledResponse)
+	if err != nil {
+		return Instance{}, fmt.Errorf("Error unmarshalling AWS response XML: %s")
+	}
 
 	return instance, nil
 }
