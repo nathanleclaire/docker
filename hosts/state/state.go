@@ -5,22 +5,22 @@ type State int
 
 const (
 	None State = iota
-	Error
 	Running
 	Paused
 	Saved
 	Stopped
 	Starting
+	Error
 )
 
 var states = []string{
 	"",
-	"Error",
 	"Running",
 	"Paused",
 	"Saved",
 	"Stopped",
 	"Starting",
+	"Error",
 }
 
 func (s State) String() string {

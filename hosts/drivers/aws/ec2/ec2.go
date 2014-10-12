@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os/exec"
 	"path"
+	"strings"
 
 	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/drivers/aws"
@@ -22,14 +23,12 @@ import (
 type Driver struct {
 	Auth         aws.Auth
 	Endpoint     string
-	AccessKey    string
 	ImageId      string
 	InstanceId   string
 	InstanceName string
 	InstanceType string
 	IPAddress    string
 	Region       string
-	SecretKey    string
 	Username     string
 	storePath    string
 }
@@ -55,12 +54,15 @@ func init() {
 	})
 }
 
-const DEFAULT_REGION string = "us-west-1"
+const (
+	DEFAULT_REGION string = "us-west-1"
 
-// "Ubuntu 14.04 LTS with Docker and Runit"
-const DEFAULT_IMAGE_ID string = "ami-014f4144"
-const DEFAULT_INSTANCE_TYPE string = "t1.micro"
-const DEFAULT_SSH_USERNAME string = "ubuntu"
+	// "Ubuntu 14.04 LTS with Docker and Runit"
+	DEFAULT_IMAGE_ID string = "ami-014f4144"
+
+	DEFAULT_INSTANCE_TYPE string = "t1.micro"
+	DEFAULT_SSH_USERNAME  string = "ubuntu"
+)
 
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
@@ -114,8 +116,10 @@ func (d *Driver) DriverName() string {
 
 func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	flags := flagsInterface.(*CreateFlags)
-	d.AccessKey = *flags.AccessKey
-	d.SecretKey = *flags.SecretKey
+	d.Auth = aws.Auth{
+		*flags.AccessKey,
+		*flags.SecretKey,
+	}
 	d.ImageId = *flags.ImageId
 	d.Region = *flags.Region
 	d.InstanceType = *flags.InstanceType
@@ -125,11 +129,11 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		return fmt.Errorf("Setting --aws-region without setting --aws-ami is disallowed")
 	}
 
-	if d.AccessKey == "" || d.SecretKey == "" {
+	if d.Auth.AccessKey == "" || d.Auth.SecretKey == "" {
 		var err error
 		d.Auth, err = aws.EnvAuth()
 		if err != nil {
-			return fmt.Errorf("Setting the AWS_ACCESS_TOKEN and AWS_SECRET_KEY environment variables or the --aws-access-token and --aws-secret-key flags")
+			return fmt.Errorf("Error setting the AWS_ACCESS_TOKEN and AWS_SECRET_KEY environment variables :%s", err)
 		}
 	} else {
 		d.Auth.AccessKey = *flags.AccessKey
@@ -155,6 +159,21 @@ func (d *Driver) Create() error {
 		return fmt.Errorf("Error running the EC2 instance: %s", err)
 	}
 	d.InstanceId = instance.info.InstanceId
+	if err := d.tagInstance("Name", d.InstanceName); err != nil {
+		return fmt.Errorf("Error tagging instance name: %s", err)
+	}
+	return nil
+}
+
+func (d *Driver) tagInstance(key string, val string) error {
+	v := url.Values{}
+	v.Set("Action", "CreateTags")
+	v.Set("ResourceId.1", d.InstanceId)
+	v.Set("Tag.1.Key", key)
+	v.Set("Tag.1.Value", val)
+	if _, err := d.makeAwsApiCall(v); err != nil {
+		return NewApiCallError(err)
+	}
 	return nil
 }
 
@@ -174,15 +193,21 @@ func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 	}
 	req.Header.Add("Content-type", "application/json")
 	awsauth.Sign(req, awsauth.Credentials{
-		AccessKeyID:     d.AccessKey,
-		SecretAccessKey: d.SecretKey,
+		AccessKeyID:     d.Auth.AccessKey,
+		SecretAccessKey: d.Auth.SecretKey,
 	})
 	resp, err := client.Do(req)
 	if err != nil {
 		return http.Response{}, fmt.Errorf("Client encountered error while doing the request: %s", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return http.Response{}, fmt.Errorf("Non-200 API Response : \n%s", resp.StatusCode)
+		baseErr := "Non-200 API Response"
+		defer resp.Body.Close()
+		content, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return http.Response{}, fmt.Errorf("%s and there was an error decoding the response body: %d %s", baseErr, resp.StatusCode, err)
+		}
+		return http.Response{}, fmt.Errorf("%s : %d\n%s", baseErr, resp.StatusCode, string(content))
 	}
 	return *resp, nil
 }
@@ -200,10 +225,10 @@ func (d *Driver) runInstance() (Instance, error) {
 	v.Set("MinCount", "1")
 	v.Set("MaxCount", "1")
 	resp, err := d.makeAwsApiCall(v)
-	defer resp.Body.Close()
 	if err != nil {
 		return instance, NewApiCallError(err)
 	}
+	defer resp.Body.Close()
 	contents, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return instance, fmt.Errorf("Error reading AWS response body")
@@ -211,7 +236,7 @@ func (d *Driver) runInstance() (Instance, error) {
 	unmarshalledResponse := aws.RunInstancesResponse{}
 	err = xml.Unmarshal(contents, &unmarshalledResponse)
 	if err != nil {
-		return instance, fmt.Errorf("Error unmarshalling AWS response XML: %s")
+		return instance, fmt.Errorf("Error unmarshalling AWS response XML: %s", err)
 	}
 
 	instance.info = unmarshalledResponse.Instances[0]
@@ -235,13 +260,29 @@ func (d *Driver) GetState() (state.State, error) {
 		return state.Error, err
 	}
 	defer resp.Body.Close()
-	// unmarshal the xml response...
 	contents, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return state.Error, fmt.Errorf("Error reading AWS response body: %s", err)
 	}
-	fmt.Println(string(contents))
-	return state.Stopped, nil
+
+	unmarshalledResponse := aws.DescribeInstancesResponse{}
+	if err = xml.Unmarshal(contents, &unmarshalledResponse); err != nil {
+		return state.Error, fmt.Errorf("Error unmarshalling AWS response XML: %s", err)
+	}
+
+	reservationSet := unmarshalledResponse.ReservationSet[0]
+	instanceStateName := reservationSet.InstancesSet[0].InstanceState.Name
+	instanceState := strings.TrimSpace(instanceStateName)
+	switch instanceState {
+	case "pending":
+		return state.Starting, nil
+	case "running":
+		return state.Running, nil
+	case "stopped":
+		return state.Stopped, nil
+	}
+
+	return state.Error, nil
 }
 
 // TODO: Do something useful with the following API responses
