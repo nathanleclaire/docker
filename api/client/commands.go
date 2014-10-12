@@ -2631,6 +2631,9 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 				if err != nil {
 					log.Errorf("error getting state for host %s: %s", host.Name, err)
 				}
+				if err = host.SaveConfig(); err != nil {
+					log.Errorf("error saving host config after learning state: %s", err)
+				}
 				stateChan <- currentState
 			}()
 

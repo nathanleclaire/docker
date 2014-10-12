@@ -10,6 +10,13 @@ type DescribeInstancesResponse struct {
 				Code int    `xml:"code"`
 				Name string `xml:"name"`
 			} `xml:"instanceState"`
+			NetworkInterfaceSet []struct {
+				Association struct {
+					PublicIp      string `xml:"publicIp"`
+					PublicDnsName string `xml:"publicDnsName"`
+					IpOwnerId     string `xml:"ipOwnerId"`
+				} `xml:"association"`
+			} `xml:"networkInterfaceSet>item"`
 		} `xml:"instancesSet>item"`
 	} `xml:"reservationSet>item"`
 }

@@ -21,16 +21,18 @@ import (
 )
 
 type Driver struct {
-	Auth         aws.Auth
-	Endpoint     string
-	ImageId      string
-	InstanceId   string
-	InstanceName string
-	InstanceType string
-	IPAddress    string
-	Region       string
-	Username     string
-	storePath    string
+	Auth          aws.Auth
+	Endpoint      string
+	ImageId       string
+	InstanceId    string
+	InstanceName  string
+	InstanceType  string
+	KeyPair       string
+	PublicDnsName string
+	PublicIp      string
+	Region        string
+	Username      string
+	storePath     string
 }
 
 type CreateFlags struct {
@@ -271,9 +273,15 @@ func (d *Driver) GetState() (state.State, error) {
 	}
 
 	reservationSet := unmarshalledResponse.ReservationSet[0]
-	instanceStateName := reservationSet.InstancesSet[0].InstanceState.Name
-	instanceState := strings.TrimSpace(instanceStateName)
-	switch instanceState {
+	instanceState := reservationSet.InstancesSet[0].InstanceState
+	networkInterfaceSet := reservationSet.InstancesSet[0].NetworkInterfaceSet
+
+	association := networkInterfaceSet[0].Association
+	d.PublicIp = association.PublicIp
+	d.PublicDnsName = association.PublicDnsName
+
+	shortState := strings.TrimSpace(instanceState.Name)
+	switch shortState {
 	case "pending":
 		return state.Starting, nil
 	case "running":
