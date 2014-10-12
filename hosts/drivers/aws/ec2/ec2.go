@@ -179,6 +179,32 @@ func (d *Driver) tagInstance(key string, val string) error {
 	return nil
 }
 
+func (d *Driver) generateKeyPair() error {
+	v := url.Values{}
+	v.Set("KeyName", fmt.Sprintf("docker-keypair-%s", utils.GenerateRandomID()))
+	resp, err := d.makeAwsApiCall(v)
+	if err != nil {
+		return fmt.Errorf("Error trying API call to create keypair: %s", err)
+	}
+	defer resp.Body.Close()
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Error reading AWS response body")
+	}
+	fmt.Println(string(contents))
+	unmarshalledResponse := aws.CreateKeyPairResponse{}
+	err = xml.Unmarshal(contents, &unmarshalledResponse)
+	if err != nil {
+		return fmt.Errorf("Error unmarshalling AWS response XML: %s", err)
+	}
+
+	// TODO: Stream key from XML response field into a file.
+	// Store at ~/.docker/hosts/${hostname}/${keyName}.pem
+	// Use for subsequent SSH access and provisioning.
+
+	return nil
+}
+
 func (d *Driver) setInstanceNameIfNotSet() {
 	if d.InstanceName == "" {
 		d.InstanceName = fmt.Sprintf("docker-host-%s", utils.GenerateRandomID())
@@ -333,9 +359,9 @@ func (d *Driver) Kill() error {
 }
 
 func (d *Driver) sshKeyPath() string {
-	return path.Join(d.storePath, "id_rsa")
+	return path.Join(d.storePath, d.KeyPair)
 }
 
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return ssh.GetSSHCommand(d.IPAddress, 22, d.Username, d.sshKeyPath(), args...)
+	return ssh.GetSSHCommand(d.PublicIp, 22, d.Username, d.sshKeyPath(), args...)
 }
