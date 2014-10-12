@@ -10,7 +10,7 @@ import (
 	"path"
 
 	"github.com/docker/docker/hosts/drivers"
-	"github.com/docker/docker/hosts/drivers/ec2/aws"
+	"github.com/docker/docker/hosts/drivers/aws"
 	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/pkg/log"
