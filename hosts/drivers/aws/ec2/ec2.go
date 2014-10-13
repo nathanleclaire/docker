@@ -27,22 +27,24 @@ type Driver struct {
 	InstanceId    string
 	InstanceName  string
 	InstanceType  string
-	KeyPair       string
+	KeyName       string
 	PublicDnsName string
 	PublicIp      string
+	SecurityGroup string
 	Region        string
 	Username      string
 	storePath     string
 }
 
 type CreateFlags struct {
-	AccessKey    *string
-	SecretKey    *string
-	ImageId      *string
-	InstanceName *string
-	Region       *string
-	Username     *string
-	InstanceType *string
+	AccessKey     *string
+	SecretKey     *string
+	ImageId       *string
+	InstanceName  *string
+	Region        *string
+	Username      *string
+	SecurityGroup *string
+	InstanceType  *string
 }
 
 type Instance struct {
@@ -62,8 +64,9 @@ const (
 	// "Ubuntu 14.04 LTS with Docker and Runit"
 	DEFAULT_IMAGE_ID string = "ami-014f4144"
 
-	DEFAULT_INSTANCE_TYPE string = "t1.micro"
-	DEFAULT_SSH_USERNAME  string = "ubuntu"
+	DEFAULT_INSTANCE_TYPE  string = "t1.micro"
+	DEFAULT_SSH_USERNAME   string = "ubuntu"
+	DEFAULT_SECURITY_GROUP string = "docker-hosts"
 )
 
 // RegisterCreateFlags registers the flags this driver adds to
@@ -105,6 +108,15 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		DEFAULT_SSH_USERNAME,
 		"Username for SSH on the instance (depends on AMI)",
 	)
+
+	// TODO: user should be able to specify multiple security groups
+	// also, the default really should be that we create one automatically
+	// and/or lookup to see if there's an existing one for our use case
+	createFlags.SecurityGroup = cmd.String(
+		[]string{"-aws-security-group"},
+		DEFAULT_SECURITY_GROUP,
+		"Security group to use for the created instance",
+	)
 	return createFlags
 }
 
@@ -126,6 +138,8 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	d.Region = *flags.Region
 	d.InstanceType = *flags.InstanceType
 	d.Endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com", d.Region)
+	d.Username = *flags.Username
+	d.SecurityGroup = *flags.SecurityGroup
 
 	if (d.Region == DEFAULT_REGION) != (d.ImageId == DEFAULT_IMAGE_ID) {
 		return fmt.Errorf("Setting --aws-region without setting --aws-ami is disallowed")
@@ -155,15 +169,31 @@ func (d *Driver) GetIP() (string, error) {
 
 func (d *Driver) Create() error {
 	d.setInstanceNameIfNotSet()
+
+	log.Infof("Creating key pair...")
+	if err := d.createKeyPair(); err != nil {
+		return fmt.Errorf("Error creating key pair: %s", err)
+	}
+
 	log.Infof("Creating AWS EC2 instance...")
 	instance, err := d.runInstance()
 	if err != nil {
 		return fmt.Errorf("Error running the EC2 instance: %s", err)
 	}
+
 	d.InstanceId = instance.info.InstanceId
+	log.Infof("Tagging instance %s", d.InstanceName)
 	if err := d.tagInstance("Name", d.InstanceName); err != nil {
 		return fmt.Errorf("Error tagging instance name: %s", err)
 	}
+
+	// state will be saved in config.json when Create() returns
+	// this is needed to get the information about public dns and ip address
+	// TODO: is this the best approach?
+	if _, err := d.GetState(); err != nil {
+		return fmt.Errorf("Error getting state of newly created host: %s", err)
+	}
+
 	return nil
 }
 
@@ -179,9 +209,11 @@ func (d *Driver) tagInstance(key string, val string) error {
 	return nil
 }
 
-func (d *Driver) generateKeyPair() error {
+func (d *Driver) createKeyPair() error {
+	d.KeyName = fmt.Sprintf("%s-key", d.InstanceName)
 	v := url.Values{}
-	v.Set("KeyName", fmt.Sprintf("docker-keypair-%s", utils.GenerateRandomID()))
+	v.Set("Action", "CreateKeyPair")
+	v.Set("KeyName", d.KeyName)
 	resp, err := d.makeAwsApiCall(v)
 	if err != nil {
 		return fmt.Errorf("Error trying API call to create keypair: %s", err)
@@ -191,11 +223,15 @@ func (d *Driver) generateKeyPair() error {
 	if err != nil {
 		return fmt.Errorf("Error reading AWS response body")
 	}
-	fmt.Println(string(contents))
+
 	unmarshalledResponse := aws.CreateKeyPairResponse{}
-	err = xml.Unmarshal(contents, &unmarshalledResponse)
-	if err != nil {
+	if xml.Unmarshal(contents, &unmarshalledResponse); err != nil {
 		return fmt.Errorf("Error unmarshalling AWS response XML: %s", err)
+	}
+
+	key := unmarshalledResponse.KeyMaterial
+	if err := ioutil.WriteFile(d.sshKeyPath(), key, 0400); err != nil {
+		return fmt.Errorf("Error writing SSH key to file: %s", err)
 	}
 
 	// TODO: Stream key from XML response field into a file.
@@ -250,8 +286,10 @@ func (d *Driver) runInstance() (Instance, error) {
 	v.Set("Action", "RunInstances")
 	v.Set("ImageId", d.ImageId)
 	v.Set("Placement.AvailabilityZone", d.Region+"a")
+	v.Set("SecurityGroup.1", d.SecurityGroup)
 	v.Set("MinCount", "1")
 	v.Set("MaxCount", "1")
+	v.Set("KeyName", d.KeyName)
 	resp, err := d.makeAwsApiCall(v)
 	if err != nil {
 		return instance, NewApiCallError(err)
@@ -359,7 +397,7 @@ func (d *Driver) Kill() error {
 }
 
 func (d *Driver) sshKeyPath() string {
-	return path.Join(d.storePath, d.KeyPair)
+	return path.Join(d.storePath, fmt.Sprintf("%s.pem", d.KeyName))
 }
 
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
