@@ -2556,6 +2556,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 	for _, command := range [][]string{
 		{"active", "Get or set the active host"},
 		{"create", "Create a host"},
+		{"inspect", "Inspect information about a host"},
 		{"ip", "Get the IP address of a host"},
 		{"kill", "Kill a host"},
 		{"list", "List hosts (default)"},
@@ -2905,4 +2906,31 @@ func (cli *DockerCli) CmdHostsActive(args ...string) error {
 
 	return nil
 
+}
+
+func (cli *DockerCli) CmdHostsInspect(args ...string) error {
+	cmd := cli.Subcmd("active", "[NAME]", "Get or set the active host")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() == 0 {
+		cmd.Usage()
+		return nil
+	}
+
+	store := hosts.NewStore()
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+
+	prettyJson, err := json.MarshalIndent(host, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(prettyJson))
+
+	return nil
 }
