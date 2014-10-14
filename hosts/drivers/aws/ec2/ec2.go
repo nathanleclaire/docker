@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/drivers/aws"
@@ -29,7 +30,7 @@ type Driver struct {
 	InstanceType  string
 	KeyName       string
 	PublicDnsName string
-	PublicIp      string
+	IPAddress     string
 	SecurityGroup string
 	Region        string
 	Username      string
@@ -59,14 +60,12 @@ func init() {
 }
 
 const (
-	DEFAULT_REGION string = "us-west-1"
-
 	// "Ubuntu 14.04 LTS with Docker and Runit"
-	DEFAULT_IMAGE_ID string = "ami-014f4144"
-
+	DEFAULT_IMAGE_ID       string = "ami-27939962"
 	DEFAULT_INSTANCE_TYPE  string = "t1.micro"
 	DEFAULT_SSH_USERNAME   string = "ubuntu"
 	DEFAULT_SECURITY_GROUP string = "docker-hosts"
+	DEFAULT_REGION         string = "us-west-1"
 )
 
 // RegisterCreateFlags registers the flags this driver adds to
@@ -128,6 +127,20 @@ func (d *Driver) DriverName() string {
 	return "aws"
 }
 
+func (d *Driver) GetURL() (string, error) {
+	if d.PublicDnsName == "" {
+		return "", fmt.Errorf("Public URL does not exist yet")
+	}
+	return fmt.Sprintf("tcp://%s:2375", d.PublicDnsName), nil
+}
+
+func (d *Driver) GetIP() (string, error) {
+	if d.IPAddress == "" {
+		return "", fmt.Errorf("IP Address does not exist yet")
+	}
+	return d.IPAddress, nil
+}
+
 func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	flags := flagsInterface.(*CreateFlags)
 	d.Auth = aws.Auth{
@@ -159,14 +172,6 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	return nil
 }
 
-func (d *Driver) GetURL() (string, error) {
-	return "", nil
-}
-
-func (d *Driver) GetIP() (string, error) {
-	return "", nil
-}
-
 func (d *Driver) Create() error {
 	d.setInstanceNameIfNotSet()
 
@@ -182,16 +187,46 @@ func (d *Driver) Create() error {
 	}
 
 	d.InstanceId = instance.info.InstanceId
+
+	if err := d.provision(); err != nil {
+		return fmt.Errorf("Error provisioning instance: %s", err)
+	}
+
 	log.Infof("Tagging instance %s", d.InstanceName)
 	if err := d.tagInstance("Name", d.InstanceName); err != nil {
 		return fmt.Errorf("Error tagging instance name: %s", err)
 	}
 
-	// state will be saved in config.json when Create() returns
-	// this is needed to get the information about public dns and ip address
-	// TODO: is this the best approach?
-	if _, err := d.GetState(); err != nil {
-		return fmt.Errorf("Error getting state of newly created host: %s", err)
+	return nil
+}
+
+func (d *Driver) provision() error {
+	log.Infof("Waiting for SSH to become available...")
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		// wait for instance to come up
+		fmt.Print(".")
+		<-ticker.C
+		instanceState, err := d.GetState()
+		if err != nil {
+			return fmt.Errorf("Error getting instance state: %s", err)
+		}
+		if instanceState == state.Running {
+			fmt.Println()
+			break
+		}
+	}
+
+	log.Infof("Provisioning instance...")
+
+	// change daemon options
+	if err := d.GetSSHCommand("echo 'DOCKER_OPTS=\"--host 0.0.0.0:2375\"' | sudo tee /etc/default/docker").Run(); err != nil {
+		return fmt.Errorf("Error running command to add daemon options over SSH : %s", err)
+	}
+
+	// restart daemon
+	if err := d.GetSSHCommand("sudo service docker restart").Run(); err != nil {
+		return fmt.Errorf("Error restarting docker service over SSH : %s", err)
 	}
 
 	return nil
@@ -233,10 +268,6 @@ func (d *Driver) createKeyPair() error {
 	if err := ioutil.WriteFile(d.sshKeyPath(), key, 0400); err != nil {
 		return fmt.Errorf("Error writing SSH key to file: %s", err)
 	}
-
-	// TODO: Stream key from XML response field into a file.
-	// Store at ~/.docker/hosts/${hostname}/${keyName}.pem
-	// Use for subsequent SSH access and provisioning.
 
 	return nil
 }
@@ -341,7 +372,7 @@ func (d *Driver) GetState() (state.State, error) {
 	networkInterfaceSet := reservationSet.InstancesSet[0].NetworkInterfaceSet
 
 	association := networkInterfaceSet[0].Association
-	d.PublicIp = association.PublicIp
+	d.IPAddress = association.PublicIp
 	d.PublicDnsName = association.PublicDnsName
 
 	shortState := strings.TrimSpace(instanceState.Name)
@@ -401,5 +432,5 @@ func (d *Driver) sshKeyPath() string {
 }
 
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return ssh.GetSSHCommand(d.PublicIp, 22, d.Username, d.sshKeyPath(), args...)
+	return ssh.GetSSHCommand(d.IPAddress, 22, d.Username, d.sshKeyPath(), args...)
 }
