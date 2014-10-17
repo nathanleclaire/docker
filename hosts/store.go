@@ -44,11 +44,11 @@ func (s *Store) Create(name string, driverName string, createFlags interface{}) 
 		return nil, err
 	}
 
-	if err := host.Create(); err != nil {
+	if err := host.SaveConfig(); err != nil {
 		return host, err
 	}
 
-	if err := host.SaveConfig(); err != nil {
+	if err := host.Create(); err != nil {
 		return host, err
 	}
 

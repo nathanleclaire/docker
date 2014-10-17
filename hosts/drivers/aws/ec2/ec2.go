@@ -3,6 +3,7 @@ package ec2
 import (
 	"encoding/xml"
 	"fmt"
+
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/drivers/aws"
 	"github.com/docker/docker/hosts/ssh"
@@ -162,7 +164,7 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		var err error
 		d.Auth, err = aws.EnvAuth()
 		if err != nil {
-			return fmt.Errorf("Error setting the AWS_ACCESS_TOKEN and AWS_SECRET_KEY environment variables :%s", err)
+			return fmt.Errorf("Error setting the AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables :%s", err)
 		}
 	} else {
 		d.Auth.AccessKey = *flags.AccessKey
@@ -174,6 +176,14 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 
 func (d *Driver) Create() error {
 	d.setInstanceNameIfNotSet()
+	//securityGroupExists, err := d.securityGroupExists()
+	//	if err != nil {
+	//		return fmt.Errorf("Error checking if security group exists: %s", err)
+	//	}
+
+	if err := d.createSecurityGroup(); err != nil {
+		return fmt.Errorf("Error creating security group: %s", err)
+	}
 
 	log.Infof("Creating key pair...")
 	if err := d.createKeyPair(); err != nil {
@@ -278,6 +288,67 @@ func (d *Driver) setInstanceNameIfNotSet() {
 	}
 }
 
+func (d *Driver) createSecurityGroup() error {
+	log.Infof("Creating security group %s", d.SecurityGroup)
+	v := url.Values{}
+	v.Set("Action", "CreateSecurityGroup")
+	v.Set("GroupName", d.SecurityGroup)
+	v.Set("GroupDescription", "foo")
+
+	resp, err := d.makeAwsApiCall(v)
+	if err != nil {
+		return fmt.Errorf("Error making API call to create security group: %s", err)
+	}
+	resp.Body.Close()
+
+	v = url.Values{}
+	v.Set("Action", "AuthorizeSecurityGroupIngress")
+	ingressPortsAllowed := []string{
+		"22",
+		"80",
+		"2375",
+	}
+	for index, port := range ingressPortsAllowed {
+		n := index + 1 // amazon starts counting from 1 not 0
+		v.Set(fmt.Sprintf("IpPermissions.%d.IpProtocol", n), "tcp")
+		v.Set(fmt.Sprintf("IpPermissions.%d.FromPort", n), port)
+		v.Set(fmt.Sprintf("IpPermissions.%d.ToPort", n), port)
+	}
+	resp, err = d.makeAwsApiCall(v)
+	if err != nil {
+		return fmt.Errorf("Error making API call to authorize security group ingress: %s", err)
+	}
+	resp.Body.Close()
+	return nil
+}
+
+func (d *Driver) securityGroupExists() (bool, error) {
+	v := url.Values{}
+	v.Set("Action", "DescribeSecurityGroups")
+	v.Set("GroupName.1", d.SecurityGroup)
+	resp, err := d.makeAwsApiCall(v)
+	if err != nil {
+		if resp.StatusCode == http.StatusBadRequest {
+			return false, nil
+		} else {
+			return false, fmt.Errorf("Error making AWS API call to check if security group exists: %s", err)
+		}
+	}
+	defer resp.Body.Close()
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("Error reading response body for describe security groups call: %s", err)
+	}
+	unmarshalledResponse := aws.DescribeSecurityGroupsResponse{}
+	if xml.Unmarshal(contents, unmarshalledResponse); err != nil {
+		return false, fmt.Errorf("Error unmarshalling security group response: %s", err)
+	}
+	if len(unmarshalledResponse.SecurityGroupInfo) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 	v.Set("Version", "2014-06-15")
 	client := &http.Client{}
@@ -287,22 +358,23 @@ func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 		return http.Response{}, fmt.Errorf("Error creating request from client")
 	}
 	req.Header.Add("Content-type", "application/json")
-	awsauth.Sign(req, awsauth.Credentials{
+	awsauth.Sign4(req, awsauth.Credentials{
 		AccessKeyID:     d.Auth.AccessKey,
 		SecretAccessKey: d.Auth.SecretKey,
 	})
+	spew.Dump(req)
 	resp, err := client.Do(req)
 	if err != nil {
-		return http.Response{}, fmt.Errorf("Client encountered error while doing the request: %s", err)
+		return *resp, fmt.Errorf("Client encountered error while doing the request: %s", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		baseErr := "Non-200 API Response"
 		defer resp.Body.Close()
 		content, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return http.Response{}, fmt.Errorf("%s and there was an error decoding the response body: %d %s", baseErr, resp.StatusCode, err)
+			return *resp, fmt.Errorf("%s and there was an error decoding the response body: %d %s", baseErr, resp.StatusCode, err)
 		}
-		return http.Response{}, fmt.Errorf("%s : %d\n%s", baseErr, resp.StatusCode, string(content))
+		return *resp, fmt.Errorf("%s : %d\n%s", baseErr, resp.StatusCode, string(content))
 	}
 	return *resp, nil
 }
