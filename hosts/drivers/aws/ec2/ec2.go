@@ -292,6 +292,19 @@ func (d *Driver) tagInstance(key string, val string) error {
 	return nil
 }
 
+func (d *Driver) deleteKeyPair() error {
+	v := url.Values{}
+	v.Set("Action", "DeleteKeyPair")
+	v.Set("KeyName", d.KeyName)
+
+	// Once again, TODO: actually use this response?
+	_, err := d.makeAwsApiCall(v)
+	if err != nil {
+		return fmt.Errorf("Error making API call to delete keypair :%s", err)
+	}
+	return nil
+}
+
 func (d *Driver) createKeyPair() error {
 	d.KeyName = fmt.Sprintf("%s-key", d.InstanceName)
 	v := url.Values{}
@@ -520,6 +533,9 @@ func (d *Driver) GetState() (state.State, error) {
 // TODO: Do something useful with the following API responses
 //       which are currently just getting discarded?
 func (d *Driver) Remove() error {
+	if err := d.deleteKeyPair(); err != nil {
+		return err
+	}
 	if _, err := d.performStandardAction("TerminateInstances"); err != nil {
 		return err
 	}
