@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -63,6 +64,7 @@ func init() {
 
 const (
 	// "Ubuntu 14.04 LTS with Docker and Runit"
+	MAX_REQUEST_ATTEMPTS   int    = 5
 	DEFAULT_IMAGE_ID       string = "ami-27939962"
 	DEFAULT_INSTANCE_TYPE  string = "t1.micro"
 	DEFAULT_SSH_USERNAME   string = "ubuntu"
@@ -176,17 +178,9 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 
 func (d *Driver) Create() error {
 	d.setInstanceNameIfNotSet()
-
-	//	securityGroupExists, err := d.securityGroupExists()
-	//	if err != nil {
-	//		return fmt.Errorf("Error checking if security group exists: %s", err)
-	//	}
-
-	//	if !securityGroupExists {
 	if err := d.createSecurityGroup(); err != nil {
 		return fmt.Errorf("Error creating security group: %s", err)
 	}
-	//	}
 
 	log.Infof("Creating key pair...")
 	if err := d.createKeyPair(); err != nil {
@@ -215,7 +209,7 @@ func (d *Driver) Create() error {
 
 func (d *Driver) provision() error {
 	log.Infof("Waiting for SSH to become available...")
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 	for {
 		// wait for instance to come up
 		fmt.Print(".")
@@ -292,7 +286,7 @@ func (d *Driver) setInstanceNameIfNotSet() {
 }
 
 func (d *Driver) createSecurityGroup() error {
-	log.Infof("Creating security group %s", d.SecurityGroup)
+
 	v := url.Values{}
 	v.Set("Action", "CreateSecurityGroup")
 	v.Set("GroupName", d.SecurityGroup)
@@ -307,59 +301,60 @@ func (d *Driver) createSecurityGroup() error {
 			if err := getDecodedResponse(resp, &errorResponse); err != nil {
 				return fmt.Errorf("Error decoding error response: %s", err)
 			}
-			log.Infof(errorResponse.Errors[0].Code)
 			if errorResponse.Errors[0].Code == aws.ErrorDuplicateGroup {
+				log.Infof("Security group docker-hosts exists, using...")
 				return nil
 			}
 		}
 		return fmt.Errorf("Error making API call to create security group: %s", err)
 	}
 
-	v = url.Values{}
-	v.Set("Action", "AuthorizeSecurityGroupIngress")
-	ingressPortsAllowed := []string{
-		"22",
-		"80",
-		"2375",
-	}
-	for index, port := range ingressPortsAllowed {
-		n := index + 1 // amazon starts counting from 1 not 0
-		v.Set(fmt.Sprintf("IpPermissions.%d.IpProtocol", n), "tcp")
-		v.Set(fmt.Sprintf("IpPermissions.%d.FromPort", n), port)
-		v.Set(fmt.Sprintf("IpPermissions.%d.ToPort", n), port)
-	}
-	resp, err = d.makeAwsApiCall(v)
-	if err != nil {
-		return fmt.Errorf("Error making API call to authorize security group ingress: %s", err)
-	}
-	return nil
-}
+	log.Infof("Security group %s created", d.SecurityGroup)
+	createSecurityGroupResponse := aws.CreateSecurityGroupResponse{}
 
-func (d *Driver) securityGroupExists() (bool, error) {
-	v := url.Values{}
-	v.Set("Action", "DescribeSecurityGroups")
-	v.Set("GroupName.1", d.SecurityGroup)
-	resp, err := d.makeAwsApiCall(v)
-	if err != nil {
-		if resp.StatusCode == http.StatusBadRequest {
-			return false, nil
-		} else {
-			return false, fmt.Errorf("Error making AWS API call to check if security group exists: %s", err)
+	if err := getDecodedResponse(resp, &createSecurityGroupResponse); err != nil {
+		return fmt.Errorf("Error decoding create security groups response: %s", err)
+	}
+
+	if os.Getenv("DEBUG") != "" {
+		spew.Dump(createSecurityGroupResponse)
+	}
+
+	// have a number of retries queued to manage eventual consistency issue
+	for attempts := 0; attempts < MAX_REQUEST_ATTEMPTS; attempts++ {
+		v := url.Values{}
+		v.Set("Action", "AuthorizeSecurityGroupIngress")
+		v.Set("GroupId", createSecurityGroupResponse.GroupId)
+		ingressPortsAllowed := []string{
+			"22",
+			"80",
+			"2375",
 		}
+		for index, port := range ingressPortsAllowed {
+			n := index + 1 // amazon starts counting from 1 not 0
+			v.Set(fmt.Sprintf("IpPermissions.%d.IpProtocol", n), "tcp")
+			v.Set(fmt.Sprintf("IpPermissions.%d.FromPort", n), port)
+			v.Set(fmt.Sprintf("IpPermissions.%d.ToPort", n), port)
+			v.Set(fmt.Sprintf("IpPermissions.%d.IpRanges.1.CidrIp", n), "0.0.0.0/0")
+		}
+		resp, err := d.makeAwsApiCall(v)
+		defer resp.Body.Close()
+		if err != nil {
+			if resp.StatusCode == http.StatusBadRequest {
+				continue
+			} else {
+				return fmt.Errorf("Error making API call to authorize security group ingress: %s", err)
+			}
+		}
+		if os.Getenv("DEBUG") != "" {
+			contents, _ := ioutil.ReadAll(resp.Body)
+			fmt.Println(string(contents))
+		}
+		time.Sleep(time.Second * 1)
+		return nil
 	}
-	defer resp.Body.Close()
-	contents, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("Error reading response body for describe security groups call: %s", err)
-	}
-	unmarshalledResponse := aws.DescribeSecurityGroupsResponse{}
-	if xml.Unmarshal(contents, unmarshalledResponse); err != nil {
-		return false, fmt.Errorf("Error unmarshalling security group response: %s", err)
-	}
-	if len(unmarshalledResponse.SecurityGroupInfo) > 0 {
-		return true, nil
-	}
-	return false, nil
+
+	return nil
 }
 
 func getDecodedResponse(r http.Response, into interface{}) error {
@@ -387,7 +382,9 @@ func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 		AccessKeyID:     d.Auth.AccessKey,
 		SecretAccessKey: d.Auth.SecretKey,
 	})
-	spew.Dump(req)
+	if os.Getenv("DEBUG") != "" {
+		spew.Dump(req)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return *resp, fmt.Errorf("Client encountered error while doing the request: %s", err)
