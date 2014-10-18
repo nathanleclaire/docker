@@ -176,14 +176,17 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 
 func (d *Driver) Create() error {
 	d.setInstanceNameIfNotSet()
-	//securityGroupExists, err := d.securityGroupExists()
+
+	//	securityGroupExists, err := d.securityGroupExists()
 	//	if err != nil {
 	//		return fmt.Errorf("Error checking if security group exists: %s", err)
 	//	}
 
+	//	if !securityGroupExists {
 	if err := d.createSecurityGroup(); err != nil {
 		return fmt.Errorf("Error creating security group: %s", err)
 	}
+	//	}
 
 	log.Infof("Creating key pair...")
 	if err := d.createKeyPair(); err != nil {
@@ -249,7 +252,7 @@ func (d *Driver) tagInstance(key string, val string) error {
 	v.Set("Tag.1.Key", key)
 	v.Set("Tag.1.Value", val)
 	if _, err := d.makeAwsApiCall(v); err != nil {
-		return NewApiCallError(err)
+		return newAwsApiCallError(err)
 	}
 	return nil
 }
@@ -293,13 +296,24 @@ func (d *Driver) createSecurityGroup() error {
 	v := url.Values{}
 	v.Set("Action", "CreateSecurityGroup")
 	v.Set("GroupName", d.SecurityGroup)
-	v.Set("GroupDescription", "foo")
+	v.Set("GroupDescription", url.QueryEscape("default for instances created by docker hosts"))
 
 	resp, err := d.makeAwsApiCall(v)
+	defer resp.Body.Close()
 	if err != nil {
+		// ugly hack since API has no way to check if SG already exists
+		if resp.StatusCode == http.StatusBadRequest {
+			var errorResponse aws.ErrorResponse
+			if err := getDecodedResponse(resp, &errorResponse); err != nil {
+				return fmt.Errorf("Error decoding error response: %s", err)
+			}
+			log.Infof(errorResponse.Errors[0].Code)
+			if errorResponse.Errors[0].Code == aws.ErrorDuplicateGroup {
+				return nil
+			}
+		}
 		return fmt.Errorf("Error making API call to create security group: %s", err)
 	}
-	resp.Body.Close()
 
 	v = url.Values{}
 	v.Set("Action", "AuthorizeSecurityGroupIngress")
@@ -318,7 +332,6 @@ func (d *Driver) createSecurityGroup() error {
 	if err != nil {
 		return fmt.Errorf("Error making API call to authorize security group ingress: %s", err)
 	}
-	resp.Body.Close()
 	return nil
 }
 
@@ -349,6 +362,18 @@ func (d *Driver) securityGroupExists() (bool, error) {
 	return false, nil
 }
 
+func getDecodedResponse(r http.Response, into interface{}) error {
+	defer r.Body.Close()
+	if err := xml.NewDecoder(r.Body).Decode(into); err != nil {
+		return fmt.Errorf("Error decoding error response: %s", err)
+	}
+	return nil
+}
+
+func newAwsApiResponseError(r http.Response) error {
+	return fmt.Errorf("Non-200 API response: %d", r.StatusCode)
+}
+
 func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 	v.Set("Version", "2014-06-15")
 	client := &http.Client{}
@@ -368,18 +393,12 @@ func (d *Driver) makeAwsApiCall(v url.Values) (http.Response, error) {
 		return *resp, fmt.Errorf("Client encountered error while doing the request: %s", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		baseErr := "Non-200 API Response"
-		defer resp.Body.Close()
-		content, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return *resp, fmt.Errorf("%s and there was an error decoding the response body: %d %s", baseErr, resp.StatusCode, err)
-		}
-		return *resp, fmt.Errorf("%s : %d\n%s", baseErr, resp.StatusCode, string(content))
+		return *resp, newAwsApiResponseError(*resp)
 	}
 	return *resp, nil
 }
 
-func NewApiCallError(err error) error {
+func newAwsApiCallError(err error) error {
 	return fmt.Errorf("Problem with AWS API call: %s", err)
 }
 
@@ -395,7 +414,7 @@ func (d *Driver) runInstance() (Instance, error) {
 	v.Set("KeyName", d.KeyName)
 	resp, err := d.makeAwsApiCall(v)
 	if err != nil {
-		return instance, NewApiCallError(err)
+		return instance, newAwsApiCallError(err)
 	}
 	defer resp.Body.Close()
 	contents, err := ioutil.ReadAll(resp.Body)
@@ -418,7 +437,7 @@ func (d *Driver) performStandardAction(action string) (http.Response, error) {
 	v.Set("InstanceId.1", d.InstanceId)
 	resp, err := d.makeAwsApiCall(v)
 	if err != nil {
-		return resp, NewApiCallError(err)
+		return resp, newAwsApiCallError(err)
 	}
 	return resp, nil
 }
