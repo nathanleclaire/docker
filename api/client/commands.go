@@ -34,7 +34,6 @@ import (
 	_ "github.com/docker/docker/hosts/drivers/digitalocean"
 	_ "github.com/docker/docker/hosts/drivers/none"
 	_ "github.com/docker/docker/hosts/drivers/virtualbox"
-	"github.com/docker/docker/hosts/state"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/archive"
@@ -2607,7 +2606,6 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 		fmt.Fprintln(w, "NAME\tACTIVE\tDRIVER\tSTATE\tURL")
 	}
 
-	stateChan := make(chan state.State)
 	wg := sync.WaitGroup{}
 
 	for _, host := range hostList {
@@ -2615,40 +2613,37 @@ func (cli *DockerCli) CmdHostsList(args ...string) error {
 		if *quiet {
 			fmt.Fprintf(w, "%s\n", host.Name)
 		} else {
-			isActive, err := store.IsActive(&host)
-			if err != nil {
-				log.Errorf("error determining whether host %q is active: %s",
-					host.Name, err)
-			}
-
-			activeString := ""
-			if isActive {
-				activeString = "*"
-			}
-
 			wg.Add(1)
 			go func() {
 				currentState, err := host.Driver.GetState()
 				if err != nil {
 					log.Errorf("error getting state for host %s: %s", host.Name, err)
 				}
+
 				if err = host.SaveConfig(); err != nil {
 					log.Errorf("error saving host config after learning state: %s", err)
 				}
-				stateChan <- currentState
-			}()
 
-			url, err := host.Driver.GetURL()
-			if err != nil {
-				log.Errorf("error getting URL for host %s: %s", host.Name, err)
-			}
+				url, err := host.Driver.GetURL()
+				if err != nil {
+					log.Errorf("error getting URL for host %s: %s", host.Name, err)
+				}
 
-			go func(host hosts.Host) {
-				currentState := <-stateChan
+				isActive, err := store.IsActive(&host)
+				if err != nil {
+					log.Errorf("error determining whether host %q is active: %s",
+						host.Name, err)
+				}
+
+				activeString := ""
+				if isActive {
+					activeString = "*"
+				}
+
 				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 					host.Name, activeString, host.Driver.DriverName(), currentState, url)
 				wg.Done()
-			}(host)
+			}()
 		}
 	}
 
