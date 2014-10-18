@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,6 +33,7 @@ type Driver struct {
 	InstanceName  string
 	InstanceType  string
 	KeyName       string
+	NoProvision   bool
 	PublicDnsName string
 	IPAddress     string
 	SecurityGroup string
@@ -45,6 +47,7 @@ type CreateFlags struct {
 	SecretKey     *string
 	ImageId       *string
 	InstanceName  *string
+	NoProvision   *bool
 	Region        *string
 	Username      *string
 	SecurityGroup *string
@@ -63,9 +66,13 @@ func init() {
 }
 
 const (
+	// maximum number of attempts to add ingress rules to the security group
+	MAX_REQUEST_ATTEMPTS        int = 5
+	MAX_SSH_CONNECTION_ATTEMPTS int = 1000
+
 	// "Ubuntu 14.04 LTS with Docker and Runit"
-	MAX_REQUEST_ATTEMPTS   int    = 5
-	DEFAULT_IMAGE_ID       string = "ami-27939962"
+	DEFAULT_IMAGE_ID string = "ami-27939962"
+
 	DEFAULT_INSTANCE_TYPE  string = "t1.micro"
 	DEFAULT_SSH_USERNAME   string = "ubuntu"
 	DEFAULT_SECURITY_GROUP string = "docker-hosts"
@@ -105,6 +112,11 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		[]string{"-aws-instance-type"},
 		DEFAULT_INSTANCE_TYPE,
 		"Type of instance to create",
+	)
+	createFlags.NoProvision = cmd.Bool(
+		[]string{"-no-provision"},
+		false,
+		"Do not provision the instance automatically",
 	)
 	createFlags.Username = cmd.String(
 		[]string{"-aws-instance-username"},
@@ -195,8 +207,10 @@ func (d *Driver) Create() error {
 
 	d.InstanceId = instance.info.InstanceId
 
-	if err := d.provision(); err != nil {
-		return fmt.Errorf("Error provisioning instance: %s", err)
+	if !d.NoProvision {
+		if err := d.provision(); err != nil {
+			return fmt.Errorf("Error provisioning instance: %s", err)
+		}
 	}
 
 	log.Infof("Tagging instance %s", d.InstanceName)
@@ -209,19 +223,29 @@ func (d *Driver) Create() error {
 
 func (d *Driver) provision() error {
 	log.Infof("Waiting for SSH to become available...")
-	ticker := time.NewTicker(5 * time.Second)
+	attempts := 0
+
 	for {
-		// wait for instance to come up
+		// wait for instance SSH to come up
+
 		fmt.Print(".")
-		<-ticker.C
-		instanceState, err := d.GetState()
+		time.Sleep(1 * time.Second)
+		attempts++
+
+		// check state so we can get instance IP address
+		_, err := d.GetState()
 		if err != nil {
 			return fmt.Errorf("Error getting instance state: %s", err)
 		}
-		if instanceState == state.Running {
-			fmt.Println()
-			break
+
+		if _, err := net.DialTimeout("tcp", fmt.Sprintf("%s:22", d.IPAddress), 1*time.Second); err != nil {
+			if attempts < MAX_SSH_CONNECTION_ATTEMPTS {
+				continue
+			} else {
+				return fmt.Errorf("SSH max attempts exceeded and last error was: %s", err)
+			}
 		}
+		break
 	}
 
 	log.Infof("Provisioning instance...")
