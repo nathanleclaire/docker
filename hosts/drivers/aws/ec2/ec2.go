@@ -33,6 +33,7 @@ type Driver struct {
 	InstanceName  string
 	InstanceType  string
 	KeyName       string
+	NoInstall     bool
 	NoProvision   bool
 	PublicDnsName string
 	IPAddress     string
@@ -47,6 +48,7 @@ type CreateFlags struct {
 	SecretKey     *string
 	ImageId       *string
 	InstanceName  *string
+	NoInstall     *bool
 	NoProvision   *bool
 	Region        *string
 	Username      *string
@@ -98,7 +100,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		DEFAULT_IMAGE_ID,
 		"AMI to use for the selected region",
 	)
-	createFlags.InstanceType = cmd.String(
+	createFlags.InstanceName = cmd.String(
 		[]string{"-aws-instance-name"},
 		"",
 		"Name of created instance",
@@ -112,6 +114,11 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		[]string{"-aws-instance-type"},
 		DEFAULT_INSTANCE_TYPE,
 		"Type of instance to create",
+	)
+	createFlags.NoInstall = cmd.Bool(
+		[]string{"-no-install"},
+		false,
+		"Do not install Docker during provisioning, assume it already exists",
 	)
 	createFlags.NoProvision = cmd.Bool(
 		[]string{"-no-provision"},
@@ -166,12 +173,15 @@ func (d *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	d.ImageId = *flags.ImageId
 	d.Region = *flags.Region
 	d.InstanceType = *flags.InstanceType
+	d.InstanceName = *flags.InstanceName
 	d.Endpoint = fmt.Sprintf("https://ec2.%s.amazonaws.com", d.Region)
 	d.Username = *flags.Username
 	d.SecurityGroup = *flags.SecurityGroup
+	d.NoInstall = *flags.NoInstall
+	d.NoProvision = *flags.NoProvision
 
 	if (d.Region == DEFAULT_REGION) != (d.ImageId == DEFAULT_IMAGE_ID) {
-		return fmt.Errorf("Setting --aws-region without setting --aws-ami is disallowed")
+		return fmt.Errorf("Setting --aws-region or --aws-ami without setting the other is disallowed")
 	}
 
 	if d.Auth.AccessKey == "" || d.Auth.SecretKey == "" {
@@ -227,7 +237,6 @@ func (d *Driver) provision() error {
 
 	for {
 		// wait for instance SSH to come up
-
 		fmt.Print(".")
 		time.Sleep(1 * time.Second)
 		attempts++
@@ -245,17 +254,25 @@ func (d *Driver) provision() error {
 				return fmt.Errorf("SSH max attempts exceeded and last error was: %s", err)
 			}
 		}
+		fmt.Println()
 		break
 	}
 
 	log.Infof("Provisioning instance...")
 
-	// change daemon options
+	if !d.NoInstall {
+		log.Infof("Downloading latest version of docker and setting up system service...")
+		if err := d.GetSSHCommand("curl -sSL https://get.docker.com/ | sudo sh").Run(); err != nil {
+			return fmt.Errorf("Error curl'ing and executing docker installation script: %s", err)
+		}
+	}
+
+	log.Infof("Setting daemon options to allow connection over TCP...")
 	if err := d.GetSSHCommand("echo 'DOCKER_OPTS=\"--host 0.0.0.0:2375\"' | sudo tee /etc/default/docker").Run(); err != nil {
 		return fmt.Errorf("Error running command to add daemon options over SSH : %s", err)
 	}
 
-	// restart daemon
+	log.Infof("Restarting docker service to reflect changes...")
 	if err := d.GetSSHCommand("sudo service docker restart").Run(); err != nil {
 		return fmt.Errorf("Error restarting docker service over SSH : %s", err)
 	}
