@@ -152,7 +152,7 @@ func (d *Driver) DriverName() string {
 
 func (d *Driver) GetURL() (string, error) {
 	if d.PublicDnsName == "" {
-		return "", fmt.Errorf("Public URL does not exist yet")
+		return "", nil
 	}
 	return fmt.Sprintf("tcp://%s:2375", d.PublicDnsName), nil
 }
@@ -524,6 +524,8 @@ func (d *Driver) GetState() (state.State, error) {
 	case "running":
 		return state.Running, nil
 	case "stopped":
+		return state.Stopped, nil
+	case "stopping":
 		return state.Stopped, nil
 	}
 
