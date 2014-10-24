@@ -1,14 +1,13 @@
 package vmClient
 
 import (
-	"crypto/rand"
+	"bytes"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -35,6 +34,7 @@ const (
 	azureRoleURL                      = "services/hostedservices/%s/deployments/%s/roles/%s"
 	azureOperationsURL                = "services/hostedservices/%s/deployments/%s/roleinstances/%s/Operations"
 	azureCertificatListURL            = "services/hostedservices/%s/certificates"
+	azureRoleSizeListURL              = "rolesizes"
 
 	osLinux   = "Linux"
 	osWindows = "Windows"
@@ -50,6 +50,7 @@ const (
 	invalidDnsLengthError              = "The DNS name must be between 3 and 25 characters."
 	invalidPasswordLengthError         = "Password must be between 4 and 30 characters."
 	invalidPasswordError               = "Password must have at least one upper case, lower case and numeric character."
+	invalidRoleSizeError               = "Invalid role size: %s. Available role sizes: %s"
 )
 
 //Region public methods starts
@@ -84,6 +85,7 @@ func CreateAzureVM(azureVMConfiguration *Role, dnsName, location string) error {
 
 		err = uploadServiceCert(dnsName, azureVMConfiguration.CertPath)
 		if err != nil {
+			DeleteHostedService(dnsName)
 			return err
 		}
 	}
@@ -93,12 +95,14 @@ func CreateAzureVM(azureVMConfiguration *Role, dnsName, location string) error {
 	vMDeployment := createVMDeploymentConfig(azureVMConfiguration)
 	vMDeploymentBytes, err := xml.Marshal(vMDeployment)
 	if err != nil {
+		DeleteHostedService(dnsName)
 		return err
 	}
 
 	requestURL := fmt.Sprintf(azureDeploymentListURL, azureVMConfiguration.RoleName)
 	requestId, err = azure.SendAzurePostRequest(requestURL, vMDeploymentBytes)
 	if err != nil {
+		DeleteHostedService(dnsName)
 		return err
 	}
 
@@ -219,6 +223,11 @@ func CreateAzureVMConfiguration(dnsName, instanceSize, imageName, location strin
 		return nil, err
 	}
 
+	err = ResolveRoleSize(instanceSize)
+	if err != nil {
+		return nil, err
+	}
+	
 	role, err := createAzureVMRole(dnsName, instanceSize, imageName, location)
 	if err != nil {
 		return nil, err
@@ -524,6 +533,48 @@ func DeleteRole(cloudserviceName, deploymentName, roleName string) error {
 	return nil
 }
 
+func GetRoleSizeList() (RoleSizeList, error) {
+	roleSizeList := RoleSizeList{}
+
+	response, err := azure.SendAzureGetRequest(azureRoleSizeListURL)
+	if err != nil {
+		return roleSizeList, err
+	}
+	
+	err = xml.Unmarshal(response, &roleSizeList)
+	if err != nil {
+		return roleSizeList, err
+	}
+	
+	return roleSizeList, err
+}
+
+func ResolveRoleSize(roleSizeName string) error {
+	if len(roleSizeName) == 0 {
+		return fmt.Errorf(azure.ParamNotSpecifiedError, "roleSizeName")
+	}
+
+	roleSizeList, err := GetRoleSizeList()
+	if err != nil {
+		return err
+	}
+
+	for _, roleSize := range roleSizeList.RoleSizes {
+		if roleSize.Name != roleSizeName {
+			continue
+		}
+
+		return nil
+	}
+
+	var availableSizes bytes.Buffer
+	for _, existingSize := range roleSizeList.RoleSizes {
+		availableSizes.WriteString(existingSize.Name + ", ")
+	}
+
+	return errors.New(fmt.Sprintf(invalidRoleSizeError, roleSizeName, strings.Trim(availableSizes.String(), ", ")))
+}
+
 //Region public methods ends
 
 //Region private methods starts
@@ -681,7 +732,7 @@ func getVHDMediaLink(dnsName, location string) (string, error) {
 
 	if storageService == nil {
 
-		uuid, err := newUUID()
+		uuid, err := azure.NewUUID()
 		if err != nil {
 			return "", err
 		}
@@ -700,22 +751,6 @@ func getVHDMediaLink(dnsName, location string) (string, error) {
 
 	vhdMediaLink := blobEndpoint + "vhds/" + dnsName + "-" + time.Now().Local().Format("20060102150405") + ".vhd"
 	return vhdMediaLink, nil
-}
-
-// newUUID generates a random UUID according to RFC 4122
-func newUUID() (string, error) {
-	uuid := make([]byte, 16)
-	n, err := io.ReadFull(rand.Reader, uuid)
-	if n != len(uuid) || err != nil {
-		return "", err
-	}
-	// variant bits; see section 4.1.1
-	uuid[8] = uuid[8]&^0xc0 | 0x80
-	// version 4 (pseudo-random); see section 4.1.3
-	uuid[6] = uuid[6]&^0xf0 | 0x40
-
-	//return fmt.Sprintf("%x-%x-%x-%x-%x", uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:]), nil
-	return fmt.Sprintf("%x", uuid[10:]), nil
 }
 
 func createLinuxProvisioningConfig(dnsName, userName, userPassword, certPath string) (ConfigurationSet, error) {

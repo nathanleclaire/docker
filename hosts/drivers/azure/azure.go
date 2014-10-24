@@ -153,14 +153,8 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	}
 
 	driver.Location = *flags.Location
-
-	if *flags.Size != "ExtraSmall" && *flags.Size != "Small" && *flags.Size != "Medium" &&
-		*flags.Size != "Large" && *flags.Size != "ExtraLarge" &&
-		*flags.Size != "A5" && *flags.Size != "A6" && *flags.Size != "A7" {
-		return fmt.Errorf("Invalid VM size specified with --azure-size. Allowed values are 'ExtraSmall,Small,Medium,Large,ExtraLarge,A5,A6,A7.")
-	}
-
 	driver.Size = *flags.Size
+	
 	if strings.ToLower(*flags.UserName) == "docker" {
 		return fmt.Errorf("'docker' is not valid user name for docker host. Please specify another user name.")
 	} else {
