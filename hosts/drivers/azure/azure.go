@@ -92,7 +92,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags.Name = cmd.String(
 		[]string{"-azure-name"},
 		"",
-		"Azure name",
+		"Azure DNS name",
 	)
 	createFlags.UserName = cmd.String(
 		[]string{"-azure-username"},
@@ -106,8 +106,8 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	)
 	createFlags.Image = cmd.String(
 		[]string{"-azure-image"},
-		"b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04-LTS-amd64-server-20140724-en-us-30GB",
-		"Azure image name",
+		"",
+		"Azure image name. Default is Ubuntu 14.04 LTS x64",
 	)
 	createFlags.SshPort = cmd.String(
 		[]string{"-azure-ssh"},
@@ -152,6 +152,12 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		driver.Name = *flags.Name
 	}
 
+	if len(*flags.Image) == 0 {
+		driver.Image = "b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04-LTS-amd64-server-20140724-en-us-30GB"
+	} else {
+		driver.Image = *flags.Image
+	}
+
 	driver.Location = *flags.Location
 	driver.Size = *flags.Size
 	
@@ -161,7 +167,6 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		driver.UserName = *flags.UserName
 	}
 	driver.UserPassword = *flags.UserPassword
-	driver.Image = *flags.Image
 	driver.DockerCertDir = *flags.DockerCertDir
 
 	dockerPort, err := strconv.Atoi(*flags.DockerPort)
