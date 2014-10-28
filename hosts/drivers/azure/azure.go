@@ -413,6 +413,12 @@ func createAzureVM(driver *Driver) error {
 		return err
 	}
 
+	fmt.Println("Waiting for SSH...")
+	err = ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SshPort))
+	if err != nil {
+		return err
+	}
+
 	err = driver.waitForDocker()
 	if err != nil {
 		return err
@@ -443,21 +449,12 @@ func (driver *Driver) setUserSubscription() error {
 
 func (driver *Driver) waitForDocker() error {
 	fmt.Println("Waiting for docker daemon on remote machine to be available.")
-	maxRepeats := 24
+	maxRepeats := 48
 	url := fmt.Sprintf("http://%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
 	success := waitForDockerEndpoint(url, maxRepeats)
 	if !success {
 		fmt.Print("\n")
-		fmt.Println("Restarting docker daemon on remote machine.")
-		err := vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
-		if err != nil {
-			return err
-		}
-		success = waitForDockerEndpoint(url, maxRepeats)
-		if !success {
-			fmt.Print("\n")
-			fmt.Println("Error: Can not run docker daemon on remote machine. Please check docker daemon at " + url)
-		}
+		return fmt.Errorf("Can not run docker daemon on remote machine. Please try again.")
 	}
 	fmt.Println()
 	fmt.Println("Docker daemon is ready.")
