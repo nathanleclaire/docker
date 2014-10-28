@@ -23,7 +23,6 @@ type Driver struct {
 	SubscriptionID          string
 	SubscriptionCert        string
 	PublishSettingsFilePath string
-	IPAddress               string
 	Name                    string
 	Location                string
 	Size                    string
