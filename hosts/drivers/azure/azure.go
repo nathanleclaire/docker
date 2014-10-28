@@ -92,7 +92,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags.Name = cmd.String(
 		[]string{"-azure-name"},
 		"",
-		"Azure DNS name",
+		"Azure cloud service name",
 	)
 	createFlags.UserName = cmd.String(
 		[]string{"-azure-username"},
