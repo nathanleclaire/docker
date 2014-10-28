@@ -2,7 +2,7 @@ package azure
 
 import (
 	"fmt"
-	"net/http"
+	"net"
 	"os/exec"
 	"path"
 	"strconv"
@@ -262,6 +262,10 @@ func (driver *Driver) Start() error {
 	if err != nil {
 		return err
 	}
+	err = driver.waitForSsh()
+	if err != nil {
+		return err
+	}
 	err = driver.waitForDocker()
 	if err != nil {
 		return err
@@ -329,6 +333,10 @@ func (driver *Driver) Restart() error {
 		return nil
 	}
 	err = vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	err = driver.waitForSsh()
 	if err != nil {
 		return err
 	}
@@ -413,8 +421,7 @@ func createAzureVM(driver *Driver) error {
 		return err
 	}
 
-	fmt.Println("Waiting for SSH...")
-	err = ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SshPort))
+	err = driver.waitForSsh()
 	if err != nil {
 		return err
 	}
@@ -447,10 +454,20 @@ func (driver *Driver) setUserSubscription() error {
 	return nil
 }
 
+func (driver *Driver) waitForSsh() error {
+	fmt.Println("Waiting for SSH...")
+	err := ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SshPort))
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
 func (driver *Driver) waitForDocker() error {
 	fmt.Println("Waiting for docker daemon on remote machine to be available.")
 	maxRepeats := 48
-	url := fmt.Sprintf("http://%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
+	url := fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
 	success := waitForDockerEndpoint(url, maxRepeats)
 	if !success {
 		fmt.Print("\n")
@@ -464,20 +481,18 @@ func (driver *Driver) waitForDocker() error {
 func waitForDockerEndpoint(url string, maxRepeats int) bool {
 	counter := 0
 	for {
-		resp, err := http.Get(url)
-		error := err.Error()
-		if strings.Contains(error, "malformed HTTP response") || len(error) == 0 {
-			break
-		}
 		fmt.Print(".")
-		if resp != nil {
-			fmt.Println(resp)
+		conn, err := net.Dial("tcp", url)
+		if err != nil {
+			time.Sleep(10 * time.Second)
+			counter++
+			if counter == maxRepeats {
+				return false
+			}
+			continue
 		}
-		time.Sleep(10 * time.Second)
-		counter++
-		if counter == maxRepeats {
-			return false
-		}
+		defer conn.Close()
+		break
 	}
 	return true
 }
