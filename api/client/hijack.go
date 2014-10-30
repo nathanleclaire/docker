@@ -19,11 +19,11 @@ import (
 	"github.com/docker/docker/pkg/term"
 )
 
-func (cli *DockerCli) dial() (net.Conn, error) {
-	if cli.tlsConfig != nil && cli.proto != "unix" {
-		return tls.Dial(cli.proto, cli.addr, cli.tlsConfig)
+func (cli *DockerCli) dial(proto string, addr string) (net.Conn, error) {
+	if cli.tlsConfig != nil && proto != "unix" {
+		return tls.Dial(proto, addr, cli.tlsConfig)
 	}
-	return net.Dial(cli.proto, cli.addr)
+	return net.Dial(proto, addr)
 }
 
 func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.ReadCloser, stdout, stderr io.Writer, started chan io.Closer, data interface{}) error {
@@ -32,6 +32,12 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 			close(started)
 		}
 	}()
+
+	url, err := cli.host.GetURL()
+	if err != nil {
+		return err
+	}
+	proto, addr := protoAddrFromURL(url)
 
 	params, err := cli.encodeData(data)
 	if err != nil {
@@ -43,9 +49,9 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 	}
 	req.Header.Set("User-Agent", "Docker-Client/"+dockerversion.VERSION)
 	req.Header.Set("Content-Type", "plain/text")
-	req.Host = cli.addr
+	req.Host = addr
 
-	dial, err := cli.dial()
+	dial, err := cli.dial(proto, addr)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return fmt.Errorf("Cannot connect to the Docker daemon. Is 'docker -d' running on this host?")

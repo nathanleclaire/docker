@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/client"
@@ -59,52 +58,45 @@ func main() {
 		return
 	}
 
-	if len(flHosts) > 1 {
-		log.Fatal("Please specify only one -H")
-	}
-
-	store := hosts.NewStore()
+	var (
+		host      *hosts.Host
+		cli       *client.DockerCli
+		tlsConfig tls.Config
+		err       error
+		store     = hosts.NewStore()
+	)
 
 	// Select active host if no host has been specified
 	if len(flHosts) == 0 {
-		host, err := store.GetActive()
+		host, err = store.GetActive()
 		if err != nil {
 			log.Fatal(err)
 		}
-		url, err := host.Driver.GetURL()
-		if err != nil {
-			log.Fatal(err)
+	} else {
+		if len(flHosts) > 1 {
+			log.Fatal("Please specify only one -H")
 		}
-		flHosts = append(flHosts, url)
-	}
 
-	hostURL := flHosts[0]
+		hostURL := flHosts[0]
 
-	// Attempt to find a host if it's a valid name
-	if _, err := hosts.ValidateHostName(hostURL); err == nil {
-		exists, err := store.Exists(hostURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if !exists {
-			log.Fatal(fmt.Errorf("Host %q does not exist. Create it using 'docker hosts create'.", hostURL))
-		}
-		host, err := store.Load(hostURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		hostURL, err = host.Driver.GetURL()
-		if err != nil {
-			log.Fatal(err)
+		// Attempt to find a host if it's a valid name
+		if _, err := hosts.ValidateHostName(hostURL); err == nil {
+			exists, err := store.Exists(hostURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if !exists {
+				log.Fatal(fmt.Errorf("Host %q does not exist. Create it using 'docker hosts create'.", hostURL))
+			}
+			host, err = store.Load(hostURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+		} else {
+			host = hosts.NewDefaultHost(hostURL)
 		}
 	}
 
-	protoAddrParts := strings.SplitN(hostURL, "://", 2)
-
-	var (
-		cli       *client.DockerCli
-		tlsConfig tls.Config
-	)
 	tlsConfig.InsecureSkipVerify = true
 
 	// If we should verify the server, we need to load a trusted ca
@@ -137,9 +129,9 @@ func main() {
 	}
 
 	if *flTls || *flTlsVerify {
-		cli = client.NewDockerCli(os.Stdin, os.Stdout, os.Stderr, nil, protoAddrParts[0], protoAddrParts[1], &tlsConfig)
+		cli = client.NewDockerCli(os.Stdin, os.Stdout, os.Stderr, nil, host, &tlsConfig)
 	} else {
-		cli = client.NewDockerCli(os.Stdin, os.Stdout, os.Stderr, nil, protoAddrParts[0], protoAddrParts[1], nil)
+		cli = client.NewDockerCli(os.Stdin, os.Stdout, os.Stderr, nil, host, nil)
 	}
 
 	if err := cli.Cmd(flag.Args()...); err != nil {

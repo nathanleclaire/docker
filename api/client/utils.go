@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/dockerversion"
@@ -30,8 +32,27 @@ var (
 	ErrConnectionRefused = errors.New("Cannot connect to the Docker daemon. Is 'docker -d' running on this host?")
 )
 
-func (cli *DockerCli) HTTPClient() *http.Client {
-	return &http.Client{Transport: cli.transport}
+// getTransport returns the HTTP transport for the CLI, storing it against the
+// CLI for reuse during the client session
+func (cli *DockerCli) getTransport(proto string, addr string) *http.Transport {
+	if cli.transport == nil {
+		cli.transport = &http.Transport{
+			TLSClientConfig: cli.tlsConfig,
+			Dial: func(dial_network, dial_addr string) (net.Conn, error) {
+				// Why 32? See issue 8035
+				return net.DialTimeout(proto, addr, 32*time.Second)
+			},
+		}
+		if proto == "unix" {
+			// no need in compressing for local communications
+			cli.transport.DisableCompression = true
+		}
+	}
+	return cli.transport
+}
+
+func (cli *DockerCli) HTTPClient(proto string, addr string) *http.Client {
+	return &http.Client{Transport: cli.getTransport(proto, addr)}
 }
 
 func (cli *DockerCli) encodeData(data interface{}) (*bytes.Buffer, error) {
@@ -55,6 +76,12 @@ func (cli *DockerCli) encodeData(data interface{}) (*bytes.Buffer, error) {
 }
 
 func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo bool) (io.ReadCloser, int, error) {
+	url, err := cli.host.GetURL()
+	if err != nil {
+		return nil, -1, err
+	}
+	proto, addr := protoAddrFromURL(url)
+
 	params, err := cli.encodeData(data)
 	if err != nil {
 		return nil, -1, err
@@ -84,14 +111,15 @@ func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo b
 		}
 	}
 	req.Header.Set("User-Agent", "Docker-Client/"+dockerversion.VERSION)
-	req.URL.Host = cli.addr
+
+	req.URL.Host = addr
 	req.URL.Scheme = cli.scheme
 	if data != nil {
 		req.Header.Set("Content-Type", "application/json")
 	} else if method == "POST" {
 		req.Header.Set("Content-Type", "plain/text")
 	}
-	resp, err := cli.HTTPClient().Do(req)
+	resp, err := cli.HTTPClient(proto, addr).Do(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return nil, -1, ErrConnectionRefused
@@ -118,6 +146,12 @@ func (cli *DockerCli) stream(method, path string, in io.Reader, out io.Writer, h
 }
 
 func (cli *DockerCli) streamHelper(method, path string, setRawTerminal bool, in io.Reader, stdout, stderr io.Writer, headers map[string][]string) error {
+	url, err := cli.host.GetURL()
+	if err != nil {
+		return err
+	}
+	proto, addr := protoAddrFromURL(url)
+
 	if (method == "POST" || method == "PUT") && in == nil {
 		in = bytes.NewReader([]byte{})
 	}
@@ -127,7 +161,7 @@ func (cli *DockerCli) streamHelper(method, path string, setRawTerminal bool, in 
 		return err
 	}
 	req.Header.Set("User-Agent", "Docker-Client/"+dockerversion.VERSION)
-	req.URL.Host = cli.addr
+	req.URL.Host = addr
 	req.URL.Scheme = cli.scheme
 	if method == "POST" {
 		req.Header.Set("Content-Type", "plain/text")
@@ -138,7 +172,7 @@ func (cli *DockerCli) streamHelper(method, path string, setRawTerminal bool, in 
 			req.Header[k] = v
 		}
 	}
-	resp, err := cli.HTTPClient().Do(req)
+	resp, err := cli.HTTPClient(proto, addr).Do(req)
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
 			return fmt.Errorf("Cannot connect to the Docker daemon. Is 'docker -d' running on this host?")
@@ -268,4 +302,9 @@ func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, err
 		return nil, -1, err
 	}
 	return body, statusCode, nil
+}
+
+func protoAddrFromURL(url string) (string, string) {
+	parts := strings.SplitN(url, "://", 2)
+	return parts[0], parts[1]
 }

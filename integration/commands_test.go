@@ -123,7 +123,7 @@ func TestRunDisconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	c1 := make(chan struct{})
@@ -173,7 +173,7 @@ func TestRunDisconnectTty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	c1 := make(chan struct{})
@@ -227,7 +227,7 @@ func TestRunDetach(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	ch := make(chan struct{})
@@ -278,7 +278,7 @@ func TestAttachDetach(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	ch := make(chan struct{})
@@ -311,7 +311,7 @@ func TestAttachDetach(t *testing.T) {
 
 	stdin, stdinPipe = io.Pipe()
 	stdout, stdoutPipe = io.Pipe()
-	cli = client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli = client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 
 	ch = make(chan struct{})
 	go func() {
@@ -363,7 +363,7 @@ func TestAttachDetachTruncatedID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	// Discard the CmdRun output
@@ -381,7 +381,7 @@ func TestAttachDetachTruncatedID(t *testing.T) {
 
 	stdin, stdinPipe = io.Pipe()
 	stdout, stdoutPipe = io.Pipe()
-	cli = client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli = client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 
 	ch := make(chan struct{})
 	go func() {
@@ -432,7 +432,7 @@ func TestAttachDisconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(stdin, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	go func() {
@@ -505,7 +505,7 @@ func TestRunAutoRemove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli := client.NewDockerCli(nil, stdoutPipe, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(nil, stdoutPipe, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	c := make(chan struct{})
@@ -546,7 +546,7 @@ func TestRunErrorBindNonExistingSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cli := client.NewDockerCli(nil, nil, ioutil.Discard, key, testDaemonProto, testDaemonAddr, nil)
+	cli := client.NewDockerCli(nil, nil, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonAddr), nil)
 	defer cleanup(globalEngine, t)
 
 	c := make(chan struct{})

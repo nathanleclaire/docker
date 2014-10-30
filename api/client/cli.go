@@ -5,14 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"reflect"
 	"strings"
 	"text/template"
-	"time"
 
+	"github.com/docker/docker/hosts"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/docker/registry"
@@ -20,8 +19,6 @@ import (
 )
 
 type DockerCli struct {
-	proto      string
-	addr       string
 	configFile *registry.ConfigFile
 	in         io.ReadCloser
 	out        io.Writer
@@ -37,6 +34,7 @@ type DockerCli struct {
 	isTerminalIn bool
 	// isTerminalOut describes if client's STDOUT is a TTY
 	isTerminalOut bool
+	host          *hosts.Host
 	transport     *http.Transport
 }
 
@@ -104,7 +102,7 @@ func (cli *DockerCli) LoadConfigFile() (err error) {
 	return err
 }
 
-func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey, proto, addr string, tlsConfig *tls.Config) *DockerCli {
+func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey, host *hosts.Host, tlsConfig *tls.Config) *DockerCli {
 	var (
 		inFd          uintptr
 		outFd         uintptr
@@ -135,22 +133,7 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey,
 		err = out
 	}
 
-	// The transport is created here for reuse during the client session
-	tr := &http.Transport{
-		TLSClientConfig: tlsConfig,
-		Dial: func(dial_network, dial_addr string) (net.Conn, error) {
-			// Why 32? See issue 8035
-			return net.DialTimeout(proto, addr, 32*time.Second)
-		},
-	}
-	if proto == "unix" {
-		// no need in compressing for local communications
-		tr.DisableCompression = true
-	}
-
 	return &DockerCli{
-		proto:         proto,
-		addr:          addr,
 		in:            in,
 		out:           out,
 		err:           err,
@@ -161,6 +144,6 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, key libtrust.PrivateKey,
 		isTerminalOut: isTerminalOut,
 		tlsConfig:     tlsConfig,
 		scheme:        scheme,
-		transport:     tr,
+		host:          host,
 	}
 }

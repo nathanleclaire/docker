@@ -42,8 +42,7 @@ func TestHttpsInfo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli := client.NewDockerCli(nil, ioutil.Discard, ioutil.Discard, key, testDaemonProto,
-		testDaemonHttpsAddr, getTlsConfig("client-cert.pem", "client-key.pem", t))
+	cli := client.NewDockerCli(nil, ioutil.Discard, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonHttpsAddr), getTlsConfig("client-cert.pem", "client-key.pem", t))
 
 	setTimeout(t, "Reading command output time out", 10*time.Second, func() {
 		if err := cli.CmdInfo(); err != nil {
@@ -59,8 +58,7 @@ func TestHttpsInfoRogueCert(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli := client.NewDockerCli(nil, ioutil.Discard, ioutil.Discard, key, testDaemonProto,
-		testDaemonHttpsAddr, getTlsConfig("client-rogue-cert.pem", "client-rogue-key.pem", t))
+	cli := client.NewDockerCli(nil, ioutil.Discard, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonHttpsAddr), getTlsConfig("client-rogue-cert.pem", "client-rogue-key.pem", t))
 
 	setTimeout(t, "Reading command output time out", 10*time.Second, func() {
 		err := cli.CmdInfo()
@@ -80,8 +78,7 @@ func TestHttpsInfoRogueServerCert(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cli := client.NewDockerCli(nil, ioutil.Discard, ioutil.Discard, key, testDaemonProto,
-		testDaemonRogueHttpsAddr, getTlsConfig("client-cert.pem", "client-key.pem", t))
+	cli := client.NewDockerCli(nil, ioutil.Discard, ioutil.Discard, key, mkHost(testDaemonProto, testDaemonRogueHttpsAddr), getTlsConfig("client-cert.pem", "client-key.pem", t))
 
 	setTimeout(t, "Reading command output time out", 10*time.Second, func() {
 		err := cli.CmdInfo()

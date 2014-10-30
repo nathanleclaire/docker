@@ -9,7 +9,9 @@ import (
 	"github.com/docker/docker/hosts/state"
 )
 
-type DefaultDriver struct{}
+type DefaultDriver struct {
+	URL string
+}
 
 func (d *DefaultDriver) DriverName() string {
 	return ""
@@ -20,11 +22,13 @@ func (d *DefaultDriver) SetConfigFromFlags(flagsInterface interface{}) error {
 }
 
 func (d *DefaultDriver) GetURL() (string, error) {
-	url := os.Getenv("DOCKER_HOST")
-	if url == "" {
-		url = fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET)
+	if d.URL != "" {
+		return d.URL, nil
 	}
-	return url, nil
+	if os.Getenv("DOCKER_HOST") != "" {
+		return os.Getenv("DOCKER_HOST"), nil
+	}
+	return fmt.Sprintf("unix://%s", api.DEFAULTUNIXSOCKET), nil
 }
 
 func (d *DefaultDriver) GetIP() (string, error) {

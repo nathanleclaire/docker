@@ -27,6 +27,11 @@ type hostConfig struct {
 	DriverName string
 }
 
+type ConnectionDetails struct {
+	Proto string
+	Addr  string
+}
+
 func NewHost(name, driverName, storePath string) (*Host, error) {
 	driver, err := drivers.NewDriver(driverName, storePath)
 	if err != nil {
@@ -40,15 +45,15 @@ func NewHost(name, driverName, storePath string) (*Host, error) {
 	}, nil
 }
 
-func NewDefaultHost() *Host {
+func NewDefaultHost(url string) *Host {
 	host := &Host{Name: "default"}
-	host.Driver = &drivers.DefaultDriver{}
+	host.Driver = &drivers.DefaultDriver{URL: url}
 	return host
 }
 
 func LoadHost(name string, storePath string) (*Host, error) {
 	if name == "default" {
-		return NewDefaultHost(), nil
+		return NewDefaultHost(""), nil
 	}
 
 	if _, err := os.Stat(storePath); os.IsNotExist(err) {
@@ -100,6 +105,10 @@ func (h *Host) Remove() error {
 		return fmt.Errorf("%q is not a directory", h.storePath)
 	}
 	return os.RemoveAll(h.storePath)
+}
+
+func (h *Host) GetURL() (string, error) {
+	return h.Driver.GetURL()
 }
 
 func (h *Host) LoadConfig() error {

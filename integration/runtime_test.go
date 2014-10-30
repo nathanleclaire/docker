@@ -18,6 +18,7 @@ import (
 
 	"github.com/docker/docker/daemon"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/hosts"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/pkg/ioutils"
@@ -138,6 +139,11 @@ func setupBaseImage() {
 			log.Fatalf("Unable to pull the test image: %s", err)
 		}
 	}
+}
+
+// make hosts for testing the CLI
+func mkHost(proto string, addr string) *hosts.Host {
+	return hosts.NewDefaultHost(fmt.Sprintf("%s://%s", proto, addr))
 }
 
 func spawnGlobalDaemon() {
