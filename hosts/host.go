@@ -27,11 +27,6 @@ type hostConfig struct {
 	DriverName string
 }
 
-type ConnectionDetails struct {
-	Proto string
-	Addr  string
-}
-
 func NewHost(name, driverName, storePath string) (*Host, error) {
 	driver, err := drivers.NewDriver(driverName, storePath)
 	if err != nil {
