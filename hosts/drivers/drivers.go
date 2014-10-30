@@ -26,7 +26,6 @@ type Driver interface {
 	Restart() error
 	Kill() error
 	GetSSHCommand(args ...string) *exec.Cmd
-	// Pause() error
 }
 
 type RegisteredDriver struct {
