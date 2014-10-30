@@ -2571,7 +2571,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 		{"inspect", "Inspect information about a host"},
 		{"ip", "Get the IP address of a host"},
 		{"kill", "Kill a host"},
-		{"list", "List hosts (default)"},
+		{"ls", "List hosts (default)"},
 		{"restart", "Restart a host"},
 		{"rm", "Remove a host"},
 		{"ssh", "Log into or run a command on a host with SSH"},
@@ -2591,14 +2591,14 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 	}
 
 	if cmd.NArg() < 1 {
-		return cli.CmdHostsList(args...)
+		return cli.CmdHostsLs(args...)
 	}
 
 	cmd.Usage()
 	return nil
 }
 
-func (cli *DockerCli) CmdHostsList(args ...string) error {
+func (cli *DockerCli) CmdHostsLs(args ...string) error {
 	cmd := cli.Subcmd("hosts list", "", "List hosts")
 	quiet := cmd.Bool([]string{"q", "-quiet"}, false, "Only display names")
 
