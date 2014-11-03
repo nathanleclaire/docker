@@ -7,6 +7,7 @@ import (
 	"path"
 
 	"github.com/docker/docker/pkg/log"
+	homedir "github.com/mitchellh/go-homedir"
 )
 
 // Store persists hosts on the filesystem
@@ -15,7 +16,11 @@ type Store struct {
 }
 
 func NewStore() *Store {
-	rootPath := path.Join(os.Getenv("HOME"), ".docker/hosts")
+	homeDir, err := homedir.Dir()
+	if err != nil {
+		log.Errorf("error getting home directory : %s", err)
+	}
+	rootPath := path.Join(homeDir, ".docker/hosts")
 	return &Store{Path: rootPath}
 }
 
