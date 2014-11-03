@@ -124,14 +124,23 @@ func TestStoreLoad(t *testing.T) {
 	}
 
 	store := NewStore()
-	url := "unix:///var/run/docker.sock"
-	_, err := store.Create("test", "none", &none.CreateFlags{URL: &url})
+	expectedURL := "unix:///foo/baz"
+	_, err := store.Create("test", "none", &none.CreateFlags{URL: &expectedURL})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	store = NewStore()
 	host, err := store.Load("test")
 	if host.Name != "test" {
 		t.Fatal("Host name is incorrect")
+	}
+	actualURL, err := host.GetURL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actualURL != expectedURL {
+		t.Fatalf("GetURL is not %q, got %q", expectedURL, expectedURL)
 	}
 }
 
@@ -158,13 +167,25 @@ func TestStoreGetSetActive(t *testing.T) {
 
 	store := NewStore()
 
+	defaultHost, err := store.Load("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// No hosts set
 	host, err := store.GetActive()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if host.Name != "default" {
-		t.Fatalf("Active host is not 'default', got %s", host.Name)
+		t.Fatalf("GetActive: Active host is not 'default', got %s", host.Name)
+	}
+	isActive, err := store.IsActive(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isActive != true {
+		t.Fatal("IsActive: Active host is not default")
 	}
 
 	// Set normal host
@@ -185,12 +206,43 @@ func TestStoreGetSetActive(t *testing.T) {
 	if host.Name != "test" {
 		t.Fatalf("Active host is not 'test', got %s", host.Name)
 	}
+	isActive, err = store.IsActive(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isActive != true {
+		t.Fatal("IsActive: Active host is not test")
+	}
+	isActive, err = store.IsActive(defaultHost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if isActive != false {
+		t.Fatal("IsActive: Active host is test, not default")
+	}
 
 	// Set default host
 	if host, err = store.Load("default"); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.SetActive(host); err != nil {
+		t.Fatal(err)
+	}
+
+	host, err = store.GetActive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if host.Name != "default" {
+		t.Fatalf("Active host is not 'default', got %s", host.Name)
+	}
+
+	// remove active host altogether
+	if err := store.SetActive(originalHost); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.RemoveActive(); err != nil {
 		t.Fatal(err)
 	}
 
