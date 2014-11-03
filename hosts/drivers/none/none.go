@@ -93,6 +93,10 @@ func (d *Driver) Kill() error {
 	return nil
 }
 
+func (d *Driver) Upgrade() error {
+	return nil
+}
+
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
 	return nil
 }

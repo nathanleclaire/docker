@@ -2577,6 +2577,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 		{"ssh", "Log into or run a command on a host with SSH"},
 		{"start", "Start a host"},
 		{"stop", "Stop a host"},
+		{"upgrade", "Upgrade a host to the latest version of Docker"},
 		{"url", "Get the URL of a host"},
 	} {
 		description += fmt.Sprintf("    %-10.10s%s\n", command[0], command[1])
@@ -2944,4 +2945,24 @@ func (cli *DockerCli) CmdHostsInspect(args ...string) error {
 	fmt.Println(string(prettyJson))
 
 	return nil
+}
+
+func (cli *DockerCli) CmdHostsUpgrade(args ...string) error {
+	cmd := cli.Subcmd("upgrade", "[NAME]", "Upgrade a host to the latest version of Docker")
+	if err := cmd.Parse(args); err != nil {
+		return err
+	}
+
+	if cmd.NArg() == 0 {
+		cmd.Usage()
+		return nil
+	}
+
+	store := hosts.NewStore()
+	host, err := store.Load(cmd.Arg(0))
+	if err != nil {
+		return err
+	}
+
+	return host.Driver.Upgrade()
 }

@@ -378,6 +378,10 @@ func (driver *Driver) GetSSHCommand(args ...string) *exec.Cmd {
 	return ssh.GetSSHCommand(driver.Name+".cloudapp.net", driver.SshPort, driver.UserName, driver.sshKeyPath(), args...)
 }
 
+func (driver *Driver) Upgrade() error {
+	return nil
+}
+
 //Region public methods ends
 
 //Region private methods starts

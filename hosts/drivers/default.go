@@ -63,6 +63,10 @@ func (d *DefaultDriver) Kill() error {
 	return nil
 }
 
+func (d *DefaultDriver) Upgrade() error {
+	return nil
+}
+
 func (d *DefaultDriver) GetSSHCommand(args ...string) *exec.Cmd {
 	return nil
 }

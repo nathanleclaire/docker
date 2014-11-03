@@ -25,6 +25,7 @@ type Driver interface {
 	Stop() error
 	Restart() error
 	Kill() error
+	Upgrade() error
 	GetSSHCommand(args ...string) *exec.Cmd
 }
 

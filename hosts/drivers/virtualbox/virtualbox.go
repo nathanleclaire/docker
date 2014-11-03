@@ -315,6 +315,30 @@ func (d *Driver) Kill() error {
 	return vbm("controlvm", d.MachineName, "poweroff")
 }
 
+func (d *Driver) Upgrade() error {
+	log.Infof("Stopping machine...")
+	if err := d.Stop(); err != nil {
+		return err
+	}
+
+	isoURL, err := getLatestReleaseURL()
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Downloading boot2docker...")
+	if err := downloadISO(d.storePath, "boot2docker.iso", isoURL); err != nil {
+		return err
+	}
+
+	log.Infof("Starting machine...")
+	if err := d.Start(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (d *Driver) GetState() (state.State, error) {
 	stdout, stderr, err := vbmOutErr("showvminfo", d.MachineName,
 		"--machinereadable")

@@ -3,6 +3,7 @@ package digitalocean
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path"
 	"time"
@@ -253,6 +254,17 @@ func (d *Driver) Restart() error {
 func (d *Driver) Kill() error {
 	_, _, err := d.getClient().DropletActions.PowerOff(d.DropletID)
 	return err
+}
+
+func (d *Driver) Upgrade() error {
+	sshCmd := d.GetSSHCommand("apt-get update && apt-get install lxc-docker")
+	sshCmd.Stdin = os.Stdin
+	sshCmd.Stdout = os.Stdout
+	sshCmd.Stderr = os.Stderr
+	if err := sshCmd.Run(); err != nil {
+		return fmt.Errorf("%s", err)
+	}
+	return nil
 }
 
 func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
