@@ -290,6 +290,10 @@ func (d *Driver) Stop() error {
 func (d *Driver) Remove() error {
 	s, err := d.GetState()
 	if err != nil {
+		if err == ErrMachineNotExist {
+			log.Infof("machine does not exist, assuming it has been removed already")
+			return nil
+		}
 		return err
 	}
 	if s == state.Running {

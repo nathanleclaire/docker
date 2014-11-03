@@ -228,11 +228,19 @@ func (d *Driver) Stop() error {
 
 func (d *Driver) Remove() error {
 	client := d.getClient()
-	if _, err := client.Keys.DeleteByID(d.SSHKeyID); err != nil {
-		return err
+	if resp, err := client.Keys.DeleteByID(d.SSHKeyID); err != nil {
+		if resp.StatusCode == 404 {
+			log.Infof("Digital Ocean SSH key doesn't exist, assuming it is already deleted")
+		} else {
+			return err
+		}
 	}
-	if _, err := client.Droplets.Delete(d.DropletID); err != nil {
-		return err
+	if resp, err := client.Droplets.Delete(d.DropletID); err != nil {
+		if resp.StatusCode == 404 {
+			log.Infof("Digital Ocean droplet doesn't exist, assuming it is already deleted")
+		} else {
+			return err
+		}
 	}
 	return nil
 }
