@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strings"
 
 	"github.com/docker/docker/hosts/drivers"
 )
@@ -104,6 +105,19 @@ func (h *Host) Remove() error {
 
 func (h *Host) GetURL() (string, error) {
 	return h.Driver.GetURL()
+}
+
+// GetProtoAddr returns the protocol and address based on the URL
+func (h *Host) GetProtoAddr() (proto, addr string, err error) {
+	url, err := h.GetURL()
+	if err != nil {
+		return "", "", err
+	}
+	parts := strings.SplitN(url, "://", 2)
+	if len(parts) == 1 {
+		return "", "", fmt.Errorf("The URL for host %q is not valid: %s", h.Name, url)
+	}
+	return parts[0], parts[1], nil
 }
 
 func (h *Host) LoadConfig() error {

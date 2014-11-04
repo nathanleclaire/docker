@@ -33,11 +33,10 @@ func (cli *DockerCli) hijack(method, path string, setRawTerminal bool, in io.Rea
 		}
 	}()
 
-	url, err := cli.host.GetURL()
+	proto, addr, err := cli.host.GetProtoAddr()
 	if err != nil {
 		return err
 	}
-	proto, addr := protoAddrFromURL(url)
 
 	params, err := cli.encodeData(data)
 	if err != nil {

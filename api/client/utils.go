@@ -76,11 +76,10 @@ func (cli *DockerCli) encodeData(data interface{}) (*bytes.Buffer, error) {
 }
 
 func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo bool) (io.ReadCloser, int, error) {
-	url, err := cli.host.GetURL()
+	proto, addr, err := cli.host.GetProtoAddr()
 	if err != nil {
 		return nil, -1, err
 	}
-	proto, addr := protoAddrFromURL(url)
 
 	params, err := cli.encodeData(data)
 	if err != nil {
@@ -146,11 +145,10 @@ func (cli *DockerCli) stream(method, path string, in io.Reader, out io.Writer, h
 }
 
 func (cli *DockerCli) streamHelper(method, path string, setRawTerminal bool, in io.Reader, stdout, stderr io.Writer, headers map[string][]string) error {
-	url, err := cli.host.GetURL()
+	proto, addr, err := cli.host.GetProtoAddr()
 	if err != nil {
 		return err
 	}
-	proto, addr := protoAddrFromURL(url)
 
 	if (method == "POST" || method == "PUT") && in == nil {
 		in = bytes.NewReader([]byte{})
@@ -302,9 +300,4 @@ func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, err
 		return nil, -1, err
 	}
 	return body, statusCode, nil
-}
-
-func protoAddrFromURL(url string) (string, string) {
-	parts := strings.SplitN(url, "://", 2)
-	return parts[0], parts[1]
 }
