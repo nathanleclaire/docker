@@ -2600,7 +2600,7 @@ func (cli *DockerCli) CmdHosts(args ...string) error {
 }
 
 func (cli *DockerCli) CmdHostsLs(args ...string) error {
-	cmd := cli.Subcmd("hosts list", "", "List hosts")
+	cmd := cli.Subcmd("hosts ls", "", "List hosts")
 	quiet := cmd.Bool([]string{"q", "-quiet"}, false, "Only display names")
 
 	if err := cmd.Parse(args); err != nil {
