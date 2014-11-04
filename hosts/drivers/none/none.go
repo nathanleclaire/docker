@@ -74,29 +74,29 @@ func (d *Driver) Create() error {
 }
 
 func (d *Driver) Start() error {
-	return nil
+	return fmt.Errorf("hosts without a driver cannot be started")
 }
 
 func (d *Driver) Stop() error {
-	return nil
+	return fmt.Errorf("hosts without a driver cannot be stopped")
 }
 
 func (d *Driver) Remove() error {
-	return nil
+	return fmt.Errorf("hosts without a driver cannot be removed")
 }
 
 func (d *Driver) Restart() error {
-	return nil
+	return fmt.Errorf("hosts without a driver cannot be restarted")
 }
 
 func (d *Driver) Kill() error {
-	return nil
+	return fmt.Errorf("hosts without a driver cannot be killed")
 }
 
 func (d *Driver) Upgrade() error {
-	return nil
+	return fmt.Errorf("hosts without a driver cannot be upgraded")
 }
 
-func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return nil
+func (d *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
+	return nil, fmt.Errorf("hosts without a driver do not support SSH")
 }

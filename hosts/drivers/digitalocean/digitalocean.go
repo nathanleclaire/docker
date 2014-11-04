@@ -154,12 +154,19 @@ func (d *Driver) Create() error {
 
 	log.Debugf("Updating /etc/default/docker to listen on all interfaces...")
 
-	cmd := d.GetSSHCommand("echo 'export DOCKER_OPTS=\"--host=tcp://0.0.0.0:2375\"' >> /etc/default/docker")
+	cmd, err := d.GetSSHCommand("echo 'export DOCKER_OPTS=\"--host=tcp://0.0.0.0:2375\"' >> /etc/default/docker")
+	if err != nil {
+		return err
+	}
 
 	if err := cmd.Run(); err != nil {
 		return err
 	}
-	if err := d.GetSSHCommand("restart docker").Run(); err != nil {
+	cmd, err = d.GetSSHCommand("restart docker")
+	if err != nil {
+		return err
+	}
+	if err := cmd.Run(); err != nil {
 		return err
 	}
 
@@ -257,7 +264,10 @@ func (d *Driver) Kill() error {
 }
 
 func (d *Driver) Upgrade() error {
-	sshCmd := d.GetSSHCommand("apt-get update && apt-get install lxc-docker")
+	sshCmd, err := d.GetSSHCommand("apt-get update && apt-get install lxc-docker")
+	if err != nil {
+		return err
+	}
 	sshCmd.Stdin = os.Stdin
 	sshCmd.Stdout = os.Stdout
 	sshCmd.Stderr = os.Stderr
@@ -267,8 +277,8 @@ func (d *Driver) Upgrade() error {
 	return nil
 }
 
-func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return ssh.GetSSHCommand(d.IPAddress, 22, "root", d.sshKeyPath(), args...)
+func (d *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
+	return ssh.GetSSHCommand(d.IPAddress, 22, "root", d.sshKeyPath(), args...), nil
 }
 
 func (d *Driver) setDropletNameIfNotSet() {

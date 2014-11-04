@@ -383,7 +383,10 @@ func (d *Driver) GetIP() (string, error) {
 		return "", drivers.ErrHostIsNotRunning
 	}
 
-	cmd := d.GetSSHCommand("ip addr show dev eth1")
+	cmd, err := d.GetSSHCommand("ip addr show dev eth1")
+	if err != nil {
+		return "", err
+	}
 
 	b, err := cmd.Output()
 	if err != nil {
@@ -403,8 +406,8 @@ func (d *Driver) GetIP() (string, error) {
 	return "", fmt.Errorf("No IP address found %s", out)
 }
 
-func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return ssh.GetSSHCommand("localhost", d.SSHPort, "docker", d.sshKeyPath(), args...)
+func (d *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
+	return ssh.GetSSHCommand("localhost", d.SSHPort, "docker", d.sshKeyPath(), args...), nil
 }
 
 func (d *Driver) sshKeyPath() string {

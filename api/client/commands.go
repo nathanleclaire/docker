@@ -2878,7 +2878,10 @@ func (cli *DockerCli) CmdHostsSsh(args ...string) error {
 		return err
 	}
 
-	sshCmd := host.Driver.GetSSHCommand(os.Args[i:]...)
+	sshCmd, err := host.Driver.GetSSHCommand(os.Args[i:]...)
+	if err != nil {
+		return err
+	}
 	sshCmd.Stdin = os.Stdin
 	sshCmd.Stdout = os.Stdout
 	sshCmd.Stderr = os.Stderr

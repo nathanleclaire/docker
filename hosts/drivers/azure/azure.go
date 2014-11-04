@@ -360,22 +360,22 @@ func (driver *Driver) Kill() error {
 	return nil
 }
 
-func (driver *Driver) GetSSHCommand(args ...string) *exec.Cmd {
+func (driver *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
 	err := driver.setUserSubscription()
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
 
 	vmState, err := driver.GetState()
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
 
 	if vmState == state.Stopped {
-		fmt.Println("Azure host is stopped. Please start it before using ssh command.")
+		return nil, fmt.Errorf("Azure host is stopped. Please start it before using ssh command.")
 	}
 
-	return ssh.GetSSHCommand(driver.Name+".cloudapp.net", driver.SshPort, driver.UserName, driver.sshKeyPath(), args...)
+	return ssh.GetSSHCommand(driver.Name+".cloudapp.net", driver.SshPort, driver.UserName, driver.sshKeyPath(), args...), nil
 }
 
 func (driver *Driver) Upgrade() error {

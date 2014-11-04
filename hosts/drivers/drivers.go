@@ -26,7 +26,7 @@ type Driver interface {
 	Restart() error
 	Kill() error
 	Upgrade() error
-	GetSSHCommand(args ...string) *exec.Cmd
+	GetSSHCommand(args ...string) (*exec.Cmd, error)
 }
 
 type RegisteredDriver struct {

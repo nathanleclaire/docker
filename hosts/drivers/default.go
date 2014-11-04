@@ -44,11 +44,11 @@ func (d *DefaultDriver) Create() error {
 }
 
 func (d *DefaultDriver) Start() error {
-	return nil
+	return fmt.Errorf("default host cannot be started")
 }
 
 func (d *DefaultDriver) Stop() error {
-	return nil
+	return fmt.Errorf("default host cannot be stopped")
 }
 
 func (d *DefaultDriver) Remove() error {
@@ -56,17 +56,17 @@ func (d *DefaultDriver) Remove() error {
 }
 
 func (d *DefaultDriver) Restart() error {
-	return nil
+	return fmt.Errorf("default host cannot be restarted")
 }
 
 func (d *DefaultDriver) Kill() error {
-	return nil
+	return fmt.Errorf("default host cannot be killed")
 }
 
 func (d *DefaultDriver) Upgrade() error {
-	return nil
+	return fmt.Errorf("default host cannot be upgraded")
 }
 
-func (d *DefaultDriver) GetSSHCommand(args ...string) *exec.Cmd {
-	return nil
+func (d *DefaultDriver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
+	return nil, fmt.Errorf("default host does not support SSH")
 }
