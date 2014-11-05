@@ -47,7 +47,7 @@ clone git github.com/gorilla/mux 136d54f81f
 
 clone git github.com/tchap/go-patricia v1.0.1
 
-clone git github.com/digitalocean/godo v0.4.0
+clone git github.com/digitalocean/godo v0.5.0
 
 clone git github.com/google/go-querystring 30f7a39f4a218feb5325f3aebc60c32a572a8274
 
