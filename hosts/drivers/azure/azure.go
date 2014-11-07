@@ -30,7 +30,6 @@ type Driver struct {
 	UserPassword            string
 	Image                   string
 	SshPort                 int
-	DockerCertDir           string
 	DockerPort              int
 	storePath               string
 }
@@ -46,7 +45,6 @@ type CreateFlags struct {
 	UserPassword            *string
 	Image                   *string
 	SshPort                 *string
-	DockerCertDir           *string
 	DockerPort              *string
 }
 
@@ -113,11 +111,6 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		"22",
 		"Azure ssh port",
 	)
-	createFlags.DockerCertDir = cmd.String(
-		[]string{"-azure-docker-cert-dir"},
-		".docker",
-		"Azure docker cert directory",
-	)
 	createFlags.DockerPort = cmd.String(
 		[]string{"-azure-docker-port"},
 		"4243",
@@ -166,7 +159,6 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		driver.UserName = *flags.UserName
 	}
 	driver.UserPassword = *flags.UserPassword
-	driver.DockerCertDir = *flags.DockerCertDir
 
 	dockerPort, err := strconv.Atoi(*flags.DockerPort)
 	if err != nil {
@@ -410,7 +402,7 @@ func createAzureVM(driver *Driver) error {
 		return err
 	}
 
-	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerCertDir, driver.DockerPort, "0.3")
+	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerPort, "0.4")
 	if err != nil {
 		return err
 	}
