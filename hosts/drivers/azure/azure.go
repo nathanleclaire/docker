@@ -2,7 +2,7 @@ package azure
 
 import (
 	"fmt"
-	"net/http"
+	"net"
 	"os/exec"
 	"path"
 	"strconv"
@@ -23,7 +23,6 @@ type Driver struct {
 	SubscriptionID          string
 	SubscriptionCert        string
 	PublishSettingsFilePath string
-	IPAddress               string
 	Name                    string
 	Location                string
 	Size                    string
@@ -31,7 +30,6 @@ type Driver struct {
 	UserPassword            string
 	Image                   string
 	SshPort                 int
-	DockerCertDir           string
 	DockerPort              int
 	storePath               string
 }
@@ -47,7 +45,6 @@ type CreateFlags struct {
 	UserPassword            *string
 	Image                   *string
 	SshPort                 *string
-	DockerCertDir           *string
 	DockerPort              *string
 }
 
@@ -92,7 +89,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	createFlags.Name = cmd.String(
 		[]string{"-azure-name"},
 		"",
-		"Azure name",
+		"Azure cloud service name",
 	)
 	createFlags.UserName = cmd.String(
 		[]string{"-azure-username"},
@@ -106,18 +103,13 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 	)
 	createFlags.Image = cmd.String(
 		[]string{"-azure-image"},
-		"b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04-LTS-amd64-server-20140724-en-us-30GB",
-		"Azure image name",
+		"",
+		"Azure image name. Default is Ubuntu 14.04 LTS x64",
 	)
 	createFlags.SshPort = cmd.String(
 		[]string{"-azure-ssh"},
 		"22",
 		"Azure ssh port",
-	)
-	createFlags.DockerCertDir = cmd.String(
-		[]string{"-azure-docker-cert-dir"},
-		".docker",
-		"Azure docker cert directory",
 	)
 	createFlags.DockerPort = cmd.String(
 		[]string{"-azure-docker-port"},
@@ -152,23 +144,21 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		driver.Name = *flags.Name
 	}
 
-	driver.Location = *flags.Location
-
-	if *flags.Size != "ExtraSmall" && *flags.Size != "Small" && *flags.Size != "Medium" &&
-		*flags.Size != "Large" && *flags.Size != "ExtraLarge" &&
-		*flags.Size != "A5" && *flags.Size != "A6" && *flags.Size != "A7" {
-		return fmt.Errorf("Invalid VM size specified with --azure-size. Allowed values are 'ExtraSmall,Small,Medium,Large,ExtraLarge,A5,A6,A7.")
+	if len(*flags.Image) == 0 {
+		driver.Image = "b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04-LTS-amd64-server-20140724-en-us-30GB"
+	} else {
+		driver.Image = *flags.Image
 	}
 
+	driver.Location = *flags.Location
 	driver.Size = *flags.Size
+	
 	if strings.ToLower(*flags.UserName) == "docker" {
 		return fmt.Errorf("'docker' is not valid user name for docker host. Please specify another user name.")
 	} else {
 		driver.UserName = *flags.UserName
 	}
 	driver.UserPassword = *flags.UserPassword
-	driver.Image = *flags.Image
-	driver.DockerCertDir = *flags.DockerCertDir
 
 	dockerPort, err := strconv.Atoi(*flags.DockerPort)
 	if err != nil {
@@ -263,6 +253,10 @@ func (driver *Driver) Start() error {
 	if err != nil {
 		return err
 	}
+	err = driver.waitForSsh()
+	if err != nil {
+		return err
+	}
 	err = driver.waitForDocker()
 	if err != nil {
 		return err
@@ -330,6 +324,10 @@ func (driver *Driver) Restart() error {
 		return nil
 	}
 	err = vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
+	if err != nil {
+		return err
+	}
+	err = driver.waitForSsh()
 	if err != nil {
 		return err
 	}
@@ -408,12 +406,17 @@ func createAzureVM(driver *Driver) error {
 		return err
 	}
 
-	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerCertDir, driver.DockerPort, "0.3")
+	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerPort, "0.4")
 	if err != nil {
 		return err
 	}
 
 	err = vmClient.CreateAzureVM(vmConfig, driver.Name, driver.Location)
+	if err != nil {
+		return err
+	}
+
+	err = driver.waitForSsh()
 	if err != nil {
 		return err
 	}
@@ -446,23 +449,24 @@ func (driver *Driver) setUserSubscription() error {
 	return nil
 }
 
+func (driver *Driver) waitForSsh() error {
+	fmt.Println("Waiting for SSH...")
+	err := ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SshPort))
+	if err != nil {
+		return err
+	}
+	
+	return nil
+}
+
 func (driver *Driver) waitForDocker() error {
 	fmt.Println("Waiting for docker daemon on remote machine to be available.")
-	maxRepeats := 24
-	url := fmt.Sprintf("http://%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
+	maxRepeats := 48
+	url := fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
 	success := waitForDockerEndpoint(url, maxRepeats)
 	if !success {
 		fmt.Print("\n")
-		fmt.Println("Restarting docker daemon on remote machine.")
-		err := vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
-		if err != nil {
-			return err
-		}
-		success = waitForDockerEndpoint(url, maxRepeats)
-		if !success {
-			fmt.Print("\n")
-			fmt.Println("Error: Can not run docker daemon on remote machine. Please check docker daemon at " + url)
-		}
+		return fmt.Errorf("Can not run docker daemon on remote machine. Please try again.")
 	}
 	fmt.Println()
 	fmt.Println("Docker daemon is ready.")
@@ -472,20 +476,18 @@ func (driver *Driver) waitForDocker() error {
 func waitForDockerEndpoint(url string, maxRepeats int) bool {
 	counter := 0
 	for {
-		resp, err := http.Get(url)
-		error := err.Error()
-		if strings.Contains(error, "malformed HTTP response") || len(error) == 0 {
-			break
-		}
 		fmt.Print(".")
-		if resp != nil {
-			fmt.Println(resp)
+		conn, err := net.Dial("tcp", url)
+		if err != nil {
+			time.Sleep(10 * time.Second)
+			counter++
+			if counter == maxRepeats {
+				return false
+			}
+			continue
 		}
-		time.Sleep(10 * time.Second)
-		counter++
-		if counter == maxRepeats {
-			return false
-		}
+		defer conn.Close()
+		break
 	}
 	return true
 }
