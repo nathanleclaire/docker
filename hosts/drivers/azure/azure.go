@@ -3,6 +3,7 @@ package azure
 import (
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
 	"path"
 	"strconv"
@@ -131,10 +132,22 @@ func (d *Driver) DriverName() string {
 func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	flags := flagsInterface.(*CreateFlags)
 	driver.SubscriptionID = *flags.SubscriptionID
-	driver.SubscriptionCert = *flags.SubscriptionCert
-	driver.PublishSettingsFilePath = *flags.PublishSettingsFilePath
 
-	if (len(driver.SubscriptionID) == 0 || len(driver.SubscriptionCert) == 0) && len(driver.PublishSettingsFilePath) == 0 {
+	if *flags.SubscriptionCert != "" {
+		if _, err := os.Stat(*flags.SubscriptionCert); os.IsNotExist(err) {
+			return err
+		}
+		driver.SubscriptionCert = *flags.SubscriptionCert
+	}
+
+	if *flags.PublishSettingsFilePath != "" {
+		if _, err := os.Stat(*flags.PublishSettingsFilePath); os.IsNotExist(err) {
+			return err
+		}
+		driver.PublishSettingsFilePath = *flags.PublishSettingsFilePath
+	}
+
+	if (driver.SubscriptionID == "" || driver.SubscriptionCert == "") && driver.PublishSettingsFilePath == "" {
 		return fmt.Errorf("Please specify azure subscription params using options: --azure-subscription-id and --azure-subscription-cert or --azure-publish-settings-file")
 	}
 
@@ -152,7 +165,7 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 
 	driver.Location = *flags.Location
 	driver.Size = *flags.Size
-	
+
 	if strings.ToLower(*flags.UserName) == "docker" {
 		return fmt.Errorf("'docker' is not valid user name for docker host. Please specify another user name.")
 	} else {
@@ -455,7 +468,7 @@ func (driver *Driver) waitForSsh() error {
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
