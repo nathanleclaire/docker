@@ -149,13 +149,13 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 		return fmt.Errorf("Please specify azure subscription params using options: --azure-subscription-id and --azure-subscription-cert or --azure-publish-settings-file")
 	}
 
-	if len(*flags.Name) == 0 {
+	if *flags.Name == "" {
 		driver.Name = generateVMName()
 	} else {
 		driver.Name = *flags.Name
 	}
 
-	if len(*flags.Image) == 0 {
+	if *flags.Image == "" {
 		driver.Image = "b39f27a8b8c64d52b05eac6a62ebad85__Ubuntu-14_04-LTS-amd64-server-20140724-en-us-30GB"
 	} else {
 		driver.Image = *flags.Image
