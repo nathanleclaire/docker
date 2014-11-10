@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/hosts/drivers"
 	"github.com/docker/docker/hosts/ssh"
 	"github.com/docker/docker/hosts/state"
+	"github.com/docker/docker/pkg/log"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/utils"
 )
@@ -187,8 +188,7 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 }
 
 func (driver *Driver) Create() error {
-	err := driver.setUserSubscription()
-	if err != nil {
+	if err := driver.setUserSubscription(); err != nil {
 		return err
 	}
 
@@ -197,8 +197,7 @@ func (driver *Driver) Create() error {
 		return err
 	}
 
-	err = driver.generateCertForAzure()
-	if err != nil {
+	if err := driver.generateCertForAzure(); err != nil {
 		return err
 	}
 
@@ -212,18 +211,15 @@ func (driver *Driver) Create() error {
 		return err
 	}
 
-	err = vmClient.CreateAzureVM(vmConfig, driver.Name, driver.Location)
-	if err != nil {
+	if err := vmClient.CreateAzureVM(vmConfig, driver.Name, driver.Location); err != nil {
 		return err
 	}
 
-	err = driver.waitForSSH()
-	if err != nil {
+	if err := driver.waitForSSH(); err != nil {
 		return err
 	}
 
-	err = driver.waitForDocker()
-	if err != nil {
+	if err := driver.waitForDocker(); err != nil {
 		return err
 	}
 
@@ -278,7 +274,7 @@ func (driver *Driver) Start() error {
 		return err
 	}
 	if vmState == state.Running || vmState == state.Starting {
-		fmt.Println("Azure host is already running or starting.")
+		log.Infof("Host is already running or starting")
 		return nil
 	}
 
@@ -307,7 +303,7 @@ func (driver *Driver) Stop() error {
 		return err
 	}
 	if vmState == state.Stopped {
-		fmt.Println("Azure host is already stopped.")
+		log.Infof("Host is already stopped")
 		return nil
 	}
 	err = vmClient.ShutdownRole(driver.Name, driver.Name, driver.Name)
@@ -353,8 +349,7 @@ func (driver *Driver) Restart() error {
 		return err
 	}
 	if vmState == state.Stopped {
-		fmt.Println("Azure host is already stopped, use start command to run it.")
-		return nil
+		return fmt.Errorf("Host is already stopped, use start command to run it")
 	}
 	err = vmClient.RestartRole(driver.Name, driver.Name, driver.Name)
 	if err != nil {
@@ -381,7 +376,7 @@ func (driver *Driver) Kill() error {
 		return err
 	}
 	if vmState == state.Stopped {
-		fmt.Println("Azure host is already stopped.")
+		log.Infof("Host is already stopped")
 		return nil
 	}
 	err = vmClient.ShutdownRole(driver.Name, driver.Name, driver.Name)
@@ -434,7 +429,7 @@ func (driver *Driver) setUserSubscription() error {
 }
 
 func (driver *Driver) waitForSSH() error {
-	fmt.Println("Waiting for SSH...")
+	log.Infof("Waiting for SSH...")
 	err := ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SSHPort))
 	if err != nil {
 		return err
@@ -444,16 +439,13 @@ func (driver *Driver) waitForSSH() error {
 }
 
 func (driver *Driver) waitForDocker() error {
-	fmt.Println("Waiting for docker daemon on remote machine to be available.")
+	log.Infof("Waiting for docker daemon on host to be available")
 	maxRepeats := 48
 	url := fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
 	success := waitForDockerEndpoint(url, maxRepeats)
 	if !success {
-		fmt.Print("\n")
 		return fmt.Errorf("Can not run docker daemon on remote machine. Please try again.")
 	}
-	fmt.Println()
-	fmt.Println("Docker daemon is ready.")
 	return nil
 }
 
