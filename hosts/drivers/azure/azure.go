@@ -56,8 +56,6 @@ func init() {
 	})
 }
 
-//Region public methods starts
-
 // RegisterCreateFlags registers the flags this driver adds to
 // "docker hosts create"
 func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
@@ -379,10 +377,6 @@ func (driver *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
 func (driver *Driver) Upgrade() error {
 	return nil
 }
-
-//Region public methods ends
-
-//Region private methods starts
 
 func createAzureVM(driver *Driver) error {
 
