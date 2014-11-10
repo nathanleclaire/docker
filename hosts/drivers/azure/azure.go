@@ -30,7 +30,7 @@ type Driver struct {
 	UserName                string
 	UserPassword            string
 	Image                   string
-	SshPort                 int
+	SSHPort                 int
 	DockerPort              int
 	storePath               string
 }
@@ -45,7 +45,7 @@ type CreateFlags struct {
 	UserName                *string
 	UserPassword            *string
 	Image                   *string
-	SshPort                 *string
+	SSHPort                 *string
 	DockerPort              *string
 }
 
@@ -105,7 +105,7 @@ func RegisterCreateFlags(cmd *flag.FlagSet) interface{} {
 		"",
 		"Azure image name. Default is Ubuntu 14.04 LTS x64",
 	)
-	createFlags.SshPort = cmd.String(
+	createFlags.SSHPort = cmd.String(
 		[]string{"-azure-ssh"},
 		"22",
 		"Azure ssh port",
@@ -123,7 +123,7 @@ func NewDriver(storePath string) (drivers.Driver, error) {
 	return driver, nil
 }
 
-func (d *Driver) DriverName() string {
+func (driver *Driver) DriverName() string {
 	return "azure"
 }
 
@@ -165,10 +165,10 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	driver.Size = *flags.Size
 
 	if strings.ToLower(*flags.UserName) == "docker" {
-		return fmt.Errorf("'docker' is not valid user name for docker host. Please specify another user name.")
-	} else {
-		driver.UserName = *flags.UserName
+		return fmt.Errorf("'docker' is not valid user name for docker host. Please specify another user name")
 	}
+
+	driver.UserName = *flags.UserName
 	driver.UserPassword = *flags.UserPassword
 
 	dockerPort, err := strconv.Atoi(*flags.DockerPort)
@@ -177,11 +177,11 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 	}
 	driver.DockerPort = dockerPort
 
-	sshPort, err := strconv.Atoi(*flags.SshPort)
+	sshPort, err := strconv.Atoi(*flags.SSHPort)
 	if err != nil {
 		return err
 	}
-	driver.SshPort = sshPort
+	driver.SSHPort = sshPort
 
 	return nil
 }
@@ -251,7 +251,7 @@ func (driver *Driver) Start() error {
 	if err != nil {
 		return err
 	}
-	err = driver.waitForSsh()
+	err = driver.waitForSSH()
 	if err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (driver *Driver) Restart() error {
 	if err != nil {
 		return err
 	}
-	err = driver.waitForSsh()
+	err = driver.waitForSSH()
 	if err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ func (driver *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("Azure host is stopped. Please start it before using ssh command.")
 	}
 
-	return ssh.GetSSHCommand(driver.Name+".cloudapp.net", driver.SshPort, driver.UserName, driver.sshKeyPath(), args...), nil
+	return ssh.GetSSHCommand(driver.Name+".cloudapp.net", driver.SSHPort, driver.UserName, driver.sshKeyPath(), args...), nil
 }
 
 func (driver *Driver) Upgrade() error {
@@ -395,7 +395,7 @@ func createAzureVM(driver *Driver) error {
 		return err
 	}
 
-	vmConfig, err = vmClient.AddAzureLinuxProvisioningConfig(vmConfig, driver.UserName, driver.UserPassword, driver.azureCertPath(), driver.SshPort)
+	vmConfig, err = vmClient.AddAzureLinuxProvisioningConfig(vmConfig, driver.UserName, driver.UserPassword, driver.azureCertPath(), driver.SSHPort)
 	if err != nil {
 		return err
 	}
@@ -410,7 +410,7 @@ func createAzureVM(driver *Driver) error {
 		return err
 	}
 
-	err = driver.waitForSsh()
+	err = driver.waitForSSH()
 	if err != nil {
 		return err
 	}
@@ -424,8 +424,8 @@ func createAzureVM(driver *Driver) error {
 }
 
 func generateVMName() string {
-	randomId := utils.TruncateID(utils.GenerateRandomID())
-	return fmt.Sprintf("docker-host-%s", randomId)
+	randomID := utils.TruncateID(utils.GenerateRandomID())
+	return fmt.Sprintf("docker-host-%s", randomID)
 }
 
 func (driver *Driver) setUserSubscription() error {
@@ -443,9 +443,9 @@ func (driver *Driver) setUserSubscription() error {
 	return nil
 }
 
-func (driver *Driver) waitForSsh() error {
+func (driver *Driver) waitForSSH() error {
 	fmt.Println("Waiting for SSH...")
-	err := ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SshPort))
+	err := ssh.WaitForTCP(fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.SSHPort))
 	if err != nil {
 		return err
 	}
