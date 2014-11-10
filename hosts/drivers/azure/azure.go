@@ -187,7 +187,42 @@ func (driver *Driver) SetConfigFromFlags(flagsInterface interface{}) error {
 }
 
 func (driver *Driver) Create() error {
-	err := createAzureVM(driver)
+	err := driver.setUserSubscription()
+	if err != nil {
+		return err
+	}
+
+	vmConfig, err := vmClient.CreateAzureVMConfiguration(driver.Name, driver.Size, driver.Image, driver.Location)
+	if err != nil {
+		return err
+	}
+
+	err = driver.generateCertForAzure()
+	if err != nil {
+		return err
+	}
+
+	vmConfig, err = vmClient.AddAzureLinuxProvisioningConfig(vmConfig, driver.UserName, driver.UserPassword, driver.azureCertPath(), driver.SSHPort)
+	if err != nil {
+		return err
+	}
+
+	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerPort, "0.4")
+	if err != nil {
+		return err
+	}
+
+	err = vmClient.CreateAzureVM(vmConfig, driver.Name, driver.Location)
+	if err != nil {
+		return err
+	}
+
+	err = driver.waitForSSH()
+	if err != nil {
+		return err
+	}
+
+	err = driver.waitForDocker()
 	if err != nil {
 		return err
 	}
@@ -375,51 +410,6 @@ func (driver *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
 }
 
 func (driver *Driver) Upgrade() error {
-	return nil
-}
-
-func createAzureVM(driver *Driver) error {
-
-	err := driver.setUserSubscription()
-	if err != nil {
-		return err
-	}
-
-	vmConfig, err := vmClient.CreateAzureVMConfiguration(driver.Name, driver.Size, driver.Image, driver.Location)
-	if err != nil {
-		return err
-	}
-
-	err = driver.generateCertForAzure()
-	if err != nil {
-		return err
-	}
-
-	vmConfig, err = vmClient.AddAzureLinuxProvisioningConfig(vmConfig, driver.UserName, driver.UserPassword, driver.azureCertPath(), driver.SSHPort)
-	if err != nil {
-		return err
-	}
-
-	vmConfig, err = vmClient.SetAzureDockerVMExtension(vmConfig, driver.DockerPort, "0.4")
-	if err != nil {
-		return err
-	}
-
-	err = vmClient.CreateAzureVM(vmConfig, driver.Name, driver.Location)
-	if err != nil {
-		return err
-	}
-
-	err = driver.waitForSSH()
-	if err != nil {
-		return err
-	}
-
-	err = driver.waitForDocker()
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
