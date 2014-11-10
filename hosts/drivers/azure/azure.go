@@ -198,25 +198,12 @@ func (driver *Driver) Create() error {
 }
 
 func (driver *Driver) GetURL() (string, error) {
-	url := fmt.Sprintf("tcp://%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
+	url := fmt.Sprintf("tcp://%s.cloudapp.net:%v", driver.Name, driver.DockerPort)
 	return url, nil
 }
 
 func (driver *Driver) GetIP() (string, error) {
-	err := driver.setUserSubscription()
-	if err != nil {
-		return "", err
-	}
-	dockerVM, err := vmClient.GetVMDeployment(driver.Name, driver.Name)
-	if err != nil {
-		if strings.Contains(err.Error(), "Code: ResourceNotFound") {
-			return "", fmt.Errorf("Azure host was not found. Please check your Azure subscription.")
-		}
-		return "", err
-	}
-	vip := dockerVM.RoleList.Role[0].ConfigurationSets.ConfigurationSet[0].InputEndpoints.InputEndpoint[0].Vip
-
-	return vip, nil
+	return fmt.Sprintf("%s.cloudapp.net", driver.Name), nil
 }
 
 func (driver *Driver) GetState() (state.State, error) {
