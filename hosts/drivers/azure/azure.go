@@ -192,6 +192,7 @@ func (driver *Driver) Create() error {
 		return err
 	}
 
+	log.Infof("Creating Azure host...")
 	vmConfig, err := vmClient.CreateAzureVMConfiguration(driver.Name, driver.Size, driver.Image, driver.Location)
 	if err != nil {
 		return err
@@ -439,7 +440,7 @@ func (driver *Driver) waitForSSH() error {
 }
 
 func (driver *Driver) waitForDocker() error {
-	log.Infof("Waiting for docker daemon on host to be available")
+	log.Infof("Waiting for docker daemon on host to be available...")
 	maxRepeats := 48
 	url := fmt.Sprintf("%s:%v", driver.Name+".cloudapp.net", driver.DockerPort)
 	success := waitForDockerEndpoint(url, maxRepeats)
@@ -452,7 +453,6 @@ func (driver *Driver) waitForDocker() error {
 func waitForDockerEndpoint(url string, maxRepeats int) bool {
 	counter := 0
 	for {
-		fmt.Print(".")
 		conn, err := net.Dial("tcp", url)
 		if err != nil {
 			time.Sleep(10 * time.Second)
