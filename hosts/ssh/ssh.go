@@ -36,8 +36,11 @@ func GenerateSSHKey(path string) error {
 		}
 
 		cmd := exec.Command("ssh-keygen", "-t", "rsa", "-N", "", "-f", path)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
+
+		if os.Getenv("DEBUG") != "" {
+			cmd.Stdout = os.Stdout
+		}
+
 		cmd.Stderr = os.Stderr
 		log.Debugf("executing: %v %v\n", cmd.Path, strings.Join(cmd.Args, " "))
 
