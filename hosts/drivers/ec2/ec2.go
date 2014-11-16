@@ -227,6 +227,9 @@ func (d *Driver) Create() error {
 
 func (d *Driver) provision() error {
 	log.Infof("Waiting for SSH to become available...")
+	var (
+		cmd *exec.Cmd
+	)
 	attempts := 0
 
 	for {
@@ -259,18 +262,21 @@ func (d *Driver) provision() error {
 
 	if !d.NoInstall {
 		log.Infof("Downloading latest version of docker and setting up system service...")
-		if err := d.GetSSHCommand("curl -sSL https://get.docker.com/ | sudo sh").Run(); err != nil {
+		cmd, _ = d.GetSSHCommand("curl -sSL https://get.docker.com/ | sudo sh")
+		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("Error curl'ing and executing docker installation script: %s", err)
 		}
 	}
 
 	log.Infof("Setting daemon options to allow connection over TCP...")
-	if err := d.GetSSHCommand("echo 'DOCKER_OPTS=\"--host 0.0.0.0:2375\"' | sudo tee /etc/default/docker").Run(); err != nil {
+	cmd, _ = d.GetSSHCommand("echo 'DOCKER_OPTS=\"--host 0.0.0.0:2375\"' | sudo tee /etc/default/docker")
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("Error running command to add daemon options over SSH : %s", err)
 	}
 
 	log.Infof("Restarting docker service to reflect changes...")
-	if err := d.GetSSHCommand("sudo service docker restart").Run(); err != nil {
+	cmd, _ = d.GetSSHCommand("sudo service docker restart")
+	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("Error restarting docker service over SSH : %s", err)
 	}
 
@@ -572,6 +578,6 @@ func (d *Driver) sshKeyPath() string {
 	return path.Join(d.storePath, fmt.Sprintf("%s.pem", d.KeyName))
 }
 
-func (d *Driver) GetSSHCommand(args ...string) *exec.Cmd {
-	return ssh.GetSSHCommand(d.IPAddress, 22, d.Username, d.sshKeyPath(), args...)
+func (d *Driver) GetSSHCommand(args ...string) (*exec.Cmd, error) {
+	return ssh.GetSSHCommand(d.IPAddress, 22, d.Username, d.sshKeyPath(), args...), nil
 }
