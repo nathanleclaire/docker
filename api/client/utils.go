@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/term"
@@ -64,10 +65,13 @@ func (cli *DockerCli) call(method, path string, data interface{}, passAuthInfo b
 		return nil, -1, err
 	}
 	if passAuthInfo {
-		cli.LoadConfigFile()
+		configStore, err := config.NewConfigStore(utils.HomeDir())
+		if err != nil {
+			return nil, -1, err
+		}
 		// Resolve the Auth config relevant for this server
-		authConfig := cli.configFile.Configs[registry.IndexServerAddress()]
-		getHeaders := func(authConfig registry.AuthConfig) (map[string][]string, error) {
+		authConfig := configStore.Registries[registry.IndexServerAddress()]
+		getHeaders := func(authConfig config.AuthConfig) (map[string][]string, error) {
 			buf, err := json.Marshal(authConfig)
 			if err != nil {
 				return nil, err

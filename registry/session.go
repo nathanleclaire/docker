@@ -18,20 +18,21 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/httputils"
 	"github.com/docker/docker/pkg/tarsum"
 	"github.com/docker/docker/utils"
 )
 
 type Session struct {
-	authConfig    *AuthConfig
+	authConfig    *config.AuthConfig
 	reqFactory    *utils.HTTPRequestFactory
 	indexEndpoint *Endpoint
 	jar           *cookiejar.Jar
 	timeout       TimeoutType
 }
 
-func NewSession(authConfig *AuthConfig, factory *utils.HTTPRequestFactory, endpoint *Endpoint, timeout bool) (r *Session, err error) {
+func NewSession(authConfig *config.AuthConfig, factory *utils.HTTPRequestFactory, endpoint *Endpoint, timeout bool) (r *Session, err error) {
 	r = &Session{
 		authConfig:    authConfig,
 		indexEndpoint: endpoint,
@@ -591,12 +592,12 @@ func (r *Session) SearchRepositories(term string) (*SearchResults, error) {
 	return result, err
 }
 
-func (r *Session) GetAuthConfig(withPasswd bool) *AuthConfig {
+func (r *Session) GetAuthConfig(withPasswd bool) *config.AuthConfig {
 	password := ""
 	if withPasswd {
 		password = r.authConfig.Password
 	}
-	return &AuthConfig{
+	return &config.AuthConfig{
 		Username: r.authConfig.Username,
 		Password: password,
 		Email:    r.authConfig.Email,

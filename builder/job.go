@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/graph"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/docker/docker/registry"
@@ -39,8 +40,8 @@ func (b *BuilderJob) CmdBuild(job *engine.Job) engine.Status {
 		rm             = job.GetenvBool("rm")
 		forceRm        = job.GetenvBool("forcerm")
 		pull           = job.GetenvBool("pull")
-		authConfig     = &registry.AuthConfig{}
-		configFile     = &registry.ConfigFile{}
+		authConfig     = &config.AuthConfig{}
+		configFile     = &config.LegacyConfigFile{}
 		tag            string
 		context        io.ReadCloser
 	)

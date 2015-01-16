@@ -25,6 +25,7 @@ import (
 	imagepkg "github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/symlink"
 	"github.com/docker/docker/pkg/system"
@@ -427,7 +428,14 @@ func (b *Builder) pullImage(name string) (*imagepkg.Image, error) {
 		if err != nil {
 			return nil, err
 		}
-		resolvedAuth := b.AuthConfigFile.ResolveAuthConfig(repoInfo.Index)
+
+		// Why do it this way instead of using config.NewConfigStore?
+		// We want to use the config store abstraction
+		// but unlike the typical (client) use case we don't want
+		// to unmarshal from disk (we were sent the legacy config file over the wire)
+		configStore := config.ConfigStore{}
+		configStore.Registries = b.AuthConfigFile.Configs
+		resolvedAuth := registry.ResolveAuthConfig(configStore, repoInfo.Index)
 		pullRegistryAuth = &resolvedAuth
 	}
 	job.SetenvBool("json", b.StreamFormatter.Json())

@@ -3,6 +3,7 @@ package registry
 import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/pkg/config"
 )
 
 // Service exposes registry capabilities in the standard Engine
@@ -40,7 +41,7 @@ func (s *Service) Install(eng *engine.Engine) error {
 // It can be used to verify the validity of a client's credentials.
 func (s *Service) Auth(job *engine.Job) engine.Status {
 	var (
-		authConfig = new(AuthConfig)
+		authConfig = new(config.AuthConfig)
 		endpoint   *Endpoint
 		index      *IndexInfo
 		status     string
@@ -100,7 +101,7 @@ func (s *Service) Search(job *engine.Job) engine.Status {
 	var (
 		term        = job.Args[0]
 		metaHeaders = map[string][]string{}
-		authConfig  = &AuthConfig{}
+		authConfig  = &config.AuthConfig{}
 	)
 	job.GetenvJson("authConfig", authConfig)
 	job.GetenvJson("metaHeaders", metaHeaders)

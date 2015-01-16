@@ -13,6 +13,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/tarsum"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/utils"
@@ -27,7 +28,7 @@ func (s *TagStore) CmdPull(job *engine.Job) engine.Status {
 		localName   = job.Args[0]
 		tag         string
 		sf          = utils.NewStreamFormatter(job.GetenvBool("json"))
-		authConfig  = &registry.AuthConfig{}
+		authConfig  = &config.AuthConfig{}
 		metaHeaders map[string][]string
 	)
 

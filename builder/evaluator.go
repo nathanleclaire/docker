@@ -31,9 +31,9 @@ import (
 	"github.com/docker/docker/builder/parser"
 	"github.com/docker/docker/daemon"
 	"github.com/docker/docker/engine"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/tarsum"
-	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/docker/utils"
 )
@@ -93,8 +93,8 @@ type Builder struct {
 	ForceRemove bool
 	Pull        bool
 
-	AuthConfig     *registry.AuthConfig
-	AuthConfigFile *registry.ConfigFile
+	AuthConfig     *config.AuthConfig
+	AuthConfigFile *config.LegacyConfigFile
 
 	// Deprecated, original writer used for ImagePull. To be removed.
 	OutOld          io.Writer

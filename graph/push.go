@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/engine"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/utils"
 	"github.com/docker/libtrust"
@@ -363,7 +364,7 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 	var (
 		localName   = job.Args[0]
 		sf          = utils.NewStreamFormatter(job.GetenvBool("json"))
-		authConfig  = &registry.AuthConfig{}
+		authConfig  = &config.AuthConfig{}
 		metaHeaders map[string][]string
 	)
 

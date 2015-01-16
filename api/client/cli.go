@@ -16,20 +16,19 @@ import (
 
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/pkg/term"
-	"github.com/docker/docker/registry"
+
 	"github.com/docker/libtrust"
 )
 
 type DockerCli struct {
-	proto      string
-	addr       string
-	configFile *registry.ConfigFile
-	in         io.ReadCloser
-	out        io.Writer
-	err        io.Writer
-	key        libtrust.PrivateKey
-	tlsConfig  *tls.Config
-	scheme     string
+	proto     string
+	addr      string
+	in        io.ReadCloser
+	out       io.Writer
+	err       io.Writer
+	key       libtrust.PrivateKey
+	tlsConfig *tls.Config
+	scheme    string
 	// inFd holds file descriptor of the client's STDIN, if it's a valid file
 	inFd uintptr
 	// outFd holds file descriptor of the client's STDOUT, if it's a valid file
@@ -102,14 +101,6 @@ func (cli *DockerCli) Subcmd(name, signature, description string, exitOnError bo
 		os.Exit(0)
 	}
 	return flags
-}
-
-func (cli *DockerCli) LoadConfigFile() (err error) {
-	cli.configFile, err = registry.LoadConfig(os.Getenv("HOME"))
-	if err != nil {
-		fmt.Fprintf(cli.err, "WARNING: %s\n", err)
-	}
-	return err
 }
 
 func (cli *DockerCli) CheckTtyInput(attachStdin, ttyMode bool) error {

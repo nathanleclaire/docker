@@ -30,6 +30,7 @@ import (
 	"github.com/docker/docker/nat"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/config"
 	"github.com/docker/docker/pkg/fileutils"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/pkg/parsers"
@@ -256,10 +257,13 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 
 	v.Set("dockerfile", *dockerfileName)
 
-	cli.LoadConfigFile()
+	configStore, err := config.NewConfigStore(utils.HomeDir())
+	if err != nil {
+		return fmt.Errorf("Error getting configuration store: %s", configStore)
+	}
 
 	headers := http.Header(make(map[string][]string))
-	buf, err := json.Marshal(cli.configFile)
+	buf, err := configStore.MarshalLegacyConfigfile()
 	if err != nil {
 		return err
 	}
@@ -315,10 +319,13 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 		return string(line)
 	}
 
-	cli.LoadConfigFile()
-	authconfig, ok := cli.configFile.Configs[serverAddress]
+	configStore, err := config.NewConfigStore(utils.HomeDir())
+	if err != nil {
+		return fmt.Errorf("Error getting configuration store: %s", configStore)
+	}
+	authconfig, ok := configStore.Registries[serverAddress]
 	if !ok {
-		authconfig = registry.AuthConfig{}
+		authconfig = config.AuthConfig{}
 	}
 
 	if username == "" {
@@ -371,12 +378,14 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	authconfig.Password = password
 	authconfig.Email = email
 	authconfig.ServerAddress = serverAddress
-	cli.configFile.Configs[serverAddress] = authconfig
+	configStore.Registries[serverAddress] = authconfig
 
-	stream, statusCode, err := cli.call("POST", "/auth", cli.configFile.Configs[serverAddress], false)
+	stream, statusCode, err := cli.call("POST", "/auth", configStore.Registries[serverAddress], false)
 	if statusCode == 401 {
-		delete(cli.configFile.Configs, serverAddress)
-		registry.SaveConfig(cli.configFile)
+		delete(configStore.Registries, serverAddress)
+		if saveErr := configStore.Save(); saveErr != nil {
+			return fmt.Errorf("Error(s) saving configuration file after failed auth call: \n%s\n%s", err, saveErr)
+		}
 		return err
 	}
 	if err != nil {
@@ -385,10 +394,11 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	var out2 engine.Env
 	err = out2.Decode(stream)
 	if err != nil {
-		cli.configFile, _ = registry.LoadConfig(os.Getenv("HOME"))
 		return err
 	}
-	registry.SaveConfig(cli.configFile)
+	if err := configStore.Save(); err != nil {
+		return fmt.Errorf("Error saving the configuration file: %s", err)
+	}
 	if out2.Get("Status") != "" {
 		fmt.Fprintf(cli.out, "%s\n", out2.Get("Status"))
 	}
@@ -406,14 +416,17 @@ func (cli *DockerCli) CmdLogout(args ...string) error {
 		serverAddress = cmd.Arg(0)
 	}
 
-	cli.LoadConfigFile()
-	if _, ok := cli.configFile.Configs[serverAddress]; !ok {
+	configStore, err := config.NewConfigStore(utils.HomeDir())
+	if err != nil {
+		return newConfigFileReadError(err)
+	}
+	if _, ok := configStore.Registries[serverAddress]; !ok {
 		fmt.Fprintf(cli.out, "Not logged in to %s\n", serverAddress)
 	} else {
 		fmt.Fprintf(cli.out, "Remove login credentials for %s\n", serverAddress)
-		delete(cli.configFile.Configs, serverAddress)
+		delete(configStore.Registries, serverAddress)
 
-		if err := registry.SaveConfig(cli.configFile); err != nil {
+		if err := configStore.Save(); err != nil {
 			return fmt.Errorf("Failed to save docker config: %v", err)
 		}
 	}
@@ -571,8 +584,11 @@ func (cli *DockerCli) CmdInfo(args ...string) error {
 	}
 
 	if len(remoteInfo.GetList("IndexServerAddress")) != 0 {
-		cli.LoadConfigFile()
-		u := cli.configFile.Configs[remoteInfo.Get("IndexServerAddress")].Username
+		configStore, err := config.NewConfigStore(utils.HomeDir())
+		if err != nil {
+			return newConfigFileReadError(err)
+		}
+		u := configStore.Registries[remoteInfo.Get("IndexServerAddress")].Username
 		if len(u) > 0 {
 			fmt.Fprintf(cli.out, "Username: %v\n", u)
 			fmt.Fprintf(cli.out, "Registry: %v\n", remoteInfo.GetList("IndexServerAddress"))
@@ -1187,7 +1203,10 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 
 	name := cmd.Arg(0)
 
-	cli.LoadConfigFile()
+	configStore, err := config.NewConfigStore(utils.HomeDir())
+	if err != nil {
+		return newConfigFileReadError(err)
+	}
 
 	remote, tag := parsers.ParseRepositoryTag(name)
 
@@ -1197,7 +1216,7 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 		return err
 	}
 	// Resolve the Auth config relevant for this server
-	authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
+	authConfig := registry.ResolveAuthConfig(configStore, repoInfo.Index)
 	// If we're not using a custom registry, we know the restrictions
 	// applied to repository names and can warn the user in advance.
 	// Custom repositories can have different rules, and we must also
@@ -1232,7 +1251,7 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 		return err
 	}
 
-	push := func(authConfig registry.AuthConfig) error {
+	push := func(authConfig config.AuthConfig) error {
 		buf, err := json.Marshal(authConfig)
 		if err != nil {
 			return err
@@ -1252,7 +1271,7 @@ func (cli *DockerCli) CmdPush(args ...string) error {
 			if err := cli.CmdLogin(repoInfo.Index.GetAuthConfigKey()); err != nil {
 				return err
 			}
-			authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
+			authConfig := registry.ResolveAuthConfig(configStore, repoInfo.Index)
 			return push(authConfig)
 		}
 		return err
@@ -1288,12 +1307,15 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 		return err
 	}
 
-	cli.LoadConfigFile()
+	configStore, err := config.NewConfigStore(utils.HomeDir())
+	if err != nil {
+		return newConfigFileReadError(err)
+	}
 
 	// Resolve the Auth config relevant for this server
-	authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
+	authConfig := registry.ResolveAuthConfig(configStore, repoInfo.Index)
 
-	pull := func(authConfig registry.AuthConfig) error {
+	pull := func(authConfig config.AuthConfig) error {
 		buf, err := json.Marshal(authConfig)
 		if err != nil {
 			return err
@@ -1313,7 +1335,7 @@ func (cli *DockerCli) CmdPull(args ...string) error {
 			if err := cli.CmdLogin(repoInfo.Index.GetAuthConfigKey()); err != nil {
 				return err
 			}
-			authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
+			authConfig := registry.ResolveAuthConfig(configStore, repoInfo.Index)
 			return pull(authConfig)
 		}
 		return err
@@ -2070,10 +2092,13 @@ func (cli *DockerCli) pullImageCustomOut(image string, out io.Writer) error {
 	}
 
 	// Load the auth config file, to be able to pull the image
-	cli.LoadConfigFile()
+	configStore, err := config.NewConfigStore(utils.HomeDir())
+	if err != nil {
+		return newConfigFileReadError(err)
+	}
 
 	// Resolve the Auth config relevant for this server
-	authConfig := cli.configFile.ResolveAuthConfig(repoInfo.Index)
+	authConfig := registry.ResolveAuthConfig(configStore, repoInfo.Index)
 	buf, err := json.Marshal(authConfig)
 	if err != nil {
 		return err
@@ -2617,4 +2642,8 @@ func (cli *DockerCli) CmdExec(args ...string) error {
 	}
 
 	return nil
+}
+
+func newConfigFileReadError(err error) error {
+	return fmt.Errorf("There was an error reading the configuration file: %s", err)
 }

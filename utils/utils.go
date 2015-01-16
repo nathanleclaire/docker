@@ -516,3 +516,10 @@ func ReadDockerIgnore(path string) ([]string, error) {
 	}
 	return excludes, nil
 }
+
+func HomeDir() string {
+	if runtime.GOOS == "windows" {
+		return os.Getenv("USERPROFILE")
+	}
+	return os.Getenv("HOME")
+}
