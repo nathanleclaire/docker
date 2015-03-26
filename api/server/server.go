@@ -1092,6 +1092,7 @@ func postBuild(eng *engine.Engine, version version.Version, w http.ResponseWrite
 	job.Setenv("memory", r.FormValue("memory"))
 	job.Setenv("cpusetcpus", r.FormValue("cpusetcpus"))
 	job.Setenv("cpushares", r.FormValue("cpushares"))
+	job.Setenv("cgroupparent", r.FormValue("cgroupparent"))
 
 	// Job cancellation. Note: not all job types support this.
 	if closeNotifier, ok := w.(http.CloseNotifier); ok {
