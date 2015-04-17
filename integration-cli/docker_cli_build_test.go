@@ -5600,6 +5600,7 @@ func TestBuildEmptyStringVolume(t *testing.T) {
 
 func TestBuildContainerWithCgroupParent(t *testing.T) {
 	testRequires(t, NativeExecDriver)
+	testRequires(t, SameHostDaemon)
 	defer deleteImages()
 
 	cgroupParent := "test"
